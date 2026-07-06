@@ -6,9 +6,9 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "Maestro"
     VERSION: str = "0.1.0"
     API_V1_STR: str = "/api/v1"
-    
+
     ENVIRONMENT: str = "development"
-    
+
     BACKEND_CORS_ORIGINS: List[AnyHttpUrl] = []
 
     @validator("BACKEND_CORS_ORIGINS", pre=True)
@@ -21,6 +21,11 @@ class Settings(BaseSettings):
 
     DATABASE_URL: str = "postgresql+asyncpg://maestro_user:maestro_password@localhost:5432/maestro_db"
     REDIS_URL: str = "redis://redis:6379/0"
+
+    # JWT Settings
+    SECRET_KEY: str = "change-me-in-production-use-a-long-random-string"
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 
     class Config:
         env_file = ".env"
