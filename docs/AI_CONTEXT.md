@@ -30,25 +30,36 @@ that analyse the business and provide proactive, actionable recommendations.
 
 ## Current Sprint
 
-**Sprint 002 — Authentication Foundation**
-**Branch:** `feature/auth-foundation`
+**Sprint 003 — User & Organization Management**
+**Branch:** `feature/user-org-management` (to be created)
 
-What exists:
+### What is fully built (Sprints 001 & 002 — COMPLETE ✅)
 - Backend foundation (FastAPI, SQLAlchemy async, PostgreSQL, Redis, Celery)
 - `TimestampedModel` base with UUID PKs, soft delete, audit fields, optimistic locking
 - User, Organization, OrganizationMember models
 - Role, Permission, RolePermission models
 - RefreshToken, AuditLog models
-- Auth router: `/register`, `/login`, `/refresh`, `/revoke`
+- Auth endpoints: `POST /api/v1/auth/register`, `POST /api/v1/auth/login`
+- Auth endpoint stubs: `/refresh`, `/revoke`, `/verify-email`, `/password-reset`
 - JWT + Argon2 security layer
-- Event system scaffolded (stubs)
-- AI agent folder structure scaffolded (empty)
+- `get_current_user` dependency in `dependencies/auth.py`
+- Full CRUD `BaseRepository` in `shared/utils/repository.py`
+- Alembic setup + initial migration (`001_initial_schema.py`)
+- Event system scaffolded (stubs in `core/events/`)
+- AI agent folder structure scaffolded (empty stubs in `ai/`)
+- Root `docker-compose.yml`
+- E2E tests: `tests/test_auth_e2e.py`
+- Master context docs: `docs/` (PROJECT_VISION, ARCHITECTURE, ROADMAP, DECISIONS, AI_CONTEXT)
+- All code on `main` branch on GitHub
 
-What is missing from Sprint 002:
-- `docker-compose.yml`
-- Alembic initial migration
-- Auth router wired into `main.py`
-- End-to-end test (register → login → protected route)
+### Sprint 003 Goals
+Build full CRUD for Users and Organizations so that:
+- A user can view and update their profile
+- A user can create an organization
+- A user can list their organizations
+- A user can invite members to an organization
+- A user can assign roles to members
+- All endpoints are protected by JWT auth
 
 ---
 
@@ -185,14 +196,19 @@ xxx/
 
 ---
 
-## Current Open Tasks (Sprint 002 Remaining)
+## Current Open Tasks (Sprint 003)
 
-1. Create `docker-compose.yml` at repo root
-2. Create Alembic migration: `initial_schema`
-3. Wire auth router into `app/main.py`
-4. Complete `shared/utils/repository.py` base CRUD class
-5. Write end-to-end test: register → login → call protected route
-6. Merge `feature/auth-foundation` → `main`
+1. Create branch `feature/user-org-management`
+2. `GET /api/v1/users/me` — Return current user profile
+3. `PATCH /api/v1/users/me` — Update first_name, last_name, password
+4. `POST /api/v1/organizations/` — Create organization (auto-add creator as owner member)
+5. `GET /api/v1/organizations/` — List organizations the current user belongs to
+6. `GET /api/v1/organizations/{org_id}` — Get a single organization
+7. `POST /api/v1/organizations/{org_id}/members` — Invite a user by email
+8. `DELETE /api/v1/organizations/{org_id}/members/{user_id}` — Remove a member
+9. `PATCH /api/v1/organizations/{org_id}/members/{user_id}/role` — Assign role to member
+10. Wire all new routers into `api/v1/router.py`
+11. Tests for each endpoint
 
 ---
 
@@ -201,12 +217,12 @@ xxx/
 | Sprint | Goal | Status |
 |---|---|---|
 | 001 | Backend Foundation | ✅ Done |
-| 002 | Auth + Multi-tenant Structure | 🔄 In Progress |
-| 003 | User & Organization CRUD | ⬜ Planned |
+| 002 | Auth + Multi-tenant Structure | ✅ Done |
+| 003 | User & Organization CRUD | 🔄 In Progress |
 | 004 | AI Executive Engine (v1) | ⬜ Planned |
 | 005 | Dashboard Foundation | ⬜ Planned |
 
 ---
 
-*Last updated: Sprint 002 — July 2026*
+*Last updated: Sprint 003 — July 2026*
 *Feed this document to any AI before starting a new session on MAESTRO.*
