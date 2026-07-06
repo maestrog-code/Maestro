@@ -30,36 +30,37 @@ that analyse the business and provide proactive, actionable recommendations.
 
 ## Current Sprint
 
-**Sprint 003 — User & Organization Management**
-**Branch:** `feature/user-org-management` (to be created)
+**Sprint 004 — AI Executive Engine**
+**Branch:** `feature/ai-executive-engine` (to be created)
 
-### What is fully built (Sprints 001 & 002 — COMPLETE ✅)
+### What is fully built (Sprints 001, 002, & 003 — COMPLETE ✅)
 - Backend foundation (FastAPI, SQLAlchemy async, PostgreSQL, Redis, Celery)
 - `TimestampedModel` base with UUID PKs, soft delete, audit fields, optimistic locking
 - User, Organization, OrganizationMember models
 - Role, Permission, RolePermission models
 - RefreshToken, AuditLog models
-- Auth endpoints: `POST /api/v1/auth/register`, `POST /api/v1/auth/login`
-- Auth endpoint stubs: `/refresh`, `/revoke`, `/verify-email`, `/password-reset`
-- JWT + Argon2 security layer
-- `get_current_user` dependency in `dependencies/auth.py`
-- Full CRUD `BaseRepository` in `shared/utils/repository.py`
-- Alembic setup + initial migration (`001_initial_schema.py`)
-- Event system scaffolded (stubs in `core/events/`)
-- AI agent folder structure scaffolded (empty stubs in `ai/`)
-- Root `docker-compose.yml`
-- E2E tests: `tests/test_auth_e2e.py`
+- Authentication: Register, login, protected routes via JWT
+- Organization management: Create org (with atomic transaction + unique slug generation), list orgs, get org
+- Membership management: Invite member, remove member, change roles
+- Centralized authorization helpers: `require_member`, `require_owner`
+- Event dispatcher with domain events (`ORGANIZATION_CREATED`, `MEMBER_INVITED`, etc.)
+- Full CRUD `BaseRepository` (persistence only)
+- Alembic migrations
+- E2E tests for auth, users, and organizations
 - Master context docs: `docs/` (PROJECT_VISION, ARCHITECTURE, ROADMAP, DECISIONS, AI_CONTEXT)
 - All code on `main` branch on GitHub
 
-### Sprint 003 Goals
-Build full CRUD for Users and Organizations so that:
-- A user can view and update their profile
-- A user can create an organization
-- A user can list their organizations
-- A user can invite members to an organization
-- A user can assign roles to members
-- All endpoints are protected by JWT auth
+### Sprint 004 Goals
+Establish the core AI runtime and execution platform so that future agents (CEO, CFO, COO) can be easily added.
+The engine must include:
+1. **AI Router**: Receives requests and selects the appropriate executive agent.
+2. **Agent Registry**: For discovering and registering available AI executives.
+3. **Conversation Memory**: Organization-scoped context and session management.
+4. **Prompt Management**: Versioned system prompts and templates.
+5. **Tool Execution Framework**: Allowing agents to safely invoke business tools.
+6. **Execution Pipeline**: Supporting request → planning → tool use → response.
+7. **Streaming Responses**: Via Server-Sent Events or WebSockets.
+8. **Observability**: Execution logs, latency, token usage, and failures.
 
 ---
 
@@ -196,19 +197,17 @@ xxx/
 
 ---
 
-## Current Open Tasks (Sprint 003)
+## Current Open Tasks (Sprint 004)
 
-1. Create branch `feature/user-org-management`
-2. `GET /api/v1/users/me` — Return current user profile
-3. `PATCH /api/v1/users/me` — Update first_name, last_name, password
-4. `POST /api/v1/organizations/` — Create organization (auto-add creator as owner member)
-5. `GET /api/v1/organizations/` — List organizations the current user belongs to
-6. `GET /api/v1/organizations/{org_id}` — Get a single organization
-7. `POST /api/v1/organizations/{org_id}/members` — Invite a user by email
-8. `DELETE /api/v1/organizations/{org_id}/members/{user_id}` — Remove a member
-9. `PATCH /api/v1/organizations/{org_id}/members/{user_id}/role` — Assign role to member
-10. Wire all new routers into `api/v1/router.py`
-11. Tests for each endpoint
+1. Create branch `feature/ai-executive-engine`
+2. Implement **Conversation Memory** (DB models and schemas for threads/messages)
+3. Implement **Agent Registry & Prompt Management** (Hardcoded configurations or DB models)
+4. Implement **Tool Execution Framework**
+5. Implement **Execution Pipeline & AI Router** (LangChain/LlamaIndex or raw provider SDK)
+6. Implement **Streaming Responses** endpoint
+7. Implement **Observability** tracking for AI usage
+8. Wire AI routers into `api/v1/router.py`
+9. Write tests for AI components using mock LLM responses
 
 ---
 
@@ -218,11 +217,11 @@ xxx/
 |---|---|---|
 | 001 | Backend Foundation | ✅ Done |
 | 002 | Auth + Multi-tenant Structure | ✅ Done |
-| 003 | User & Organization CRUD | 🔄 In Progress |
-| 004 | AI Executive Engine (v1) | ⬜ Planned |
+| 003 | User & Organization CRUD | ✅ Done |
+| 004 | AI Executive Engine (v1) | 🔄 In Progress |
 | 005 | Dashboard Foundation | ⬜ Planned |
 
 ---
 
-*Last updated: Sprint 003 — July 2026*
+*Last updated: Sprint 004 — July 2026*
 *Feed this document to any AI before starting a new session on MAESTRO.*
