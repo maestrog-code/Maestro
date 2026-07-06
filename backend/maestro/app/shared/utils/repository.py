@@ -46,8 +46,6 @@ class BaseRepository(Generic[ModelType]):
         """Create a new record from a plain dict."""
         db_obj = self.model(**obj_in)
         db.add(db_obj)
-        await db.commit()
-        await db.refresh(db_obj)
         return db_obj
 
     async def update(
@@ -62,8 +60,6 @@ class BaseRepository(Generic[ModelType]):
             if hasattr(db_obj, field):
                 setattr(db_obj, field, value)
         db.add(db_obj)
-        await db.commit()
-        await db.refresh(db_obj)
         return db_obj
 
     async def soft_delete(self, db: AsyncSession, *, id: uuid.UUID) -> Optional[ModelType]:
@@ -75,8 +71,6 @@ class BaseRepository(Generic[ModelType]):
         db_obj.is_deleted = True
         db_obj.deleted_at = datetime.utcnow()
         db.add(db_obj)
-        await db.commit()
-        await db.refresh(db_obj)
         return db_obj
 
     async def hard_delete(self, db: AsyncSession, *, id: uuid.UUID) -> Optional[ModelType]:
@@ -89,6 +83,5 @@ class BaseRepository(Generic[ModelType]):
         if not db_obj:
             return None
         await db.delete(db_obj)
-        await db.commit()
         return db_obj
 

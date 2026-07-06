@@ -15,6 +15,7 @@ from uuid import UUID
 
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.exc import IntegrityError
 
 from app.core.events.dispatcher import dispatcher
 from app.core.events.types import EventType
@@ -123,30 +124,45 @@ async def create_organization(
       4. Add the creator as an active member with the owner role
       5. Commit once — never partially created
     """
-    slug = await _generate_unique_slug(db, org_in.name)
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            async with db.begin_nested():
+                slug = await _generate_unique_slug(db, org_in.name)
 
-    org = Organization(name=org_in.name, slug=slug, created_by=creator_id)
-    db.add(org)
-    await db.flush()  # get org.id without committing
+                org = Organization(name=org_in.name, slug=slug, created_by=creator_id)
+                db.add(org)
+                await db.flush()  # get org.id without committing
 
-    # Create the owner role
-    owner_role = Role(
-        name="owner",
-        description="Full control over the organization.",
-        organization_id=org.id,
-        created_by=creator_id,
-    )
-    db.add(owner_role)
-    await db.flush()  # get owner_role.id
+                # Create the owner role
+                owner_role = Role(
+                    name="owner",
+                    description="Full control over the organization.",
+                    organization_id=org.id,
+                    created_by=creator_id,
+                )
+                db.add(owner_role)
+                await db.flush()  # get owner_role.id
 
-    # Add creator as owner member
-    await member_repository.add_member(
-        db,
-        organization_id=org.id,
-        user_id=creator_id,
-        role_id=owner_role.id,
-        status="active",
-    )
+                # Add creator as owner member
+                await member_repository.add_member(
+                    db,
+                    organization_id=org.id,
+                    user_id=creator_id,
+                    role_id=owner_role.id,
+                    status="active",
+                )
+            
+            # If we succeed without raising IntegrityError, break out of loop
+            break
+        except IntegrityError:
+            if attempt < max_retries - 1:
+                continue
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Could not generate a unique organization slug. Please try a different name."
+                )
 
     await db.commit()
     await db.refresh(org)
@@ -257,6 +273,7 @@ async def remove_member(
         )
 
     await member_repository.soft_delete(db, id=target_member.id)
+    await db.commit()
 
     dispatcher.publish(
         EventType.MEMBER_REMOVED,
