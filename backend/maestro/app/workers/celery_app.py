@@ -8,8 +8,10 @@ celery_app = Celery(
 )
 
 celery_app.conf.task_routes = {
-    "app.workers.tasks.*": "main-queue"
+    "app.workers.tasks.*": "main-queue",
+    "knowledge.*": "knowledge-queue",
 }
+
 
 # Example task
 @celery_app.task(acks_late=True)

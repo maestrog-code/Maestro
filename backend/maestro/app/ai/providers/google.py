@@ -171,5 +171,24 @@ class GoogleProvider(BaseLLMProvider):
                 yield chunk.text
 
     async def embeddings(self, texts: List[str]) -> List[List[float]]:
-        # Stub for Sprint 005
-        raise NotImplementedError("Embeddings will be implemented in Sprint 005")
+        """
+        Generate embeddings using Google's text-embedding-004 model.
+        Processes texts individually (the google-genai SDK embed_content call
+        accepts a single content at a time in the current version).
+
+        Returns a list of float vectors, one per input text.
+        """
+        results = []
+        for text in texts:
+            response = await self.client.aio.models.embed_content(
+                model=ai_settings.EMBEDDING_MODEL,
+                contents=text,
+            )
+            # google-genai SDK returns EmbedContentResponse with .embeddings list
+            if response.embeddings and len(response.embeddings) > 0:
+                results.append(list(response.embeddings[0].values))
+            else:
+                # Fallback: zero vector of correct dimensions
+                results.append([0.0] * ai_settings.EMBEDDING_DIMENSIONS)
+        return results
+

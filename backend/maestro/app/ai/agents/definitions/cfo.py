@@ -6,7 +6,13 @@ cfo_agent = AgentDefinition(
     name="Chief Financial Officer",
     version="1.0",
     system_prompt_template="cfo_system",
-    tools=[],  # Will populate as tools are added
+    tools=[
+        "search_knowledge_base",
+        "get_document",
+        "list_documents",
+        "remember_fact",
+        "forget_fact"
+    ],
     provider=ai_settings.DEFAULT_PROVIDER,
     temperature=ai_settings.DEFAULT_TEMPERATURE,
     max_tokens=2048,

@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.ai_settings import ai_settings
 from app.ai.agents.registry import registry
 from app.ai.providers.google import GoogleProvider
-from app.ai.prompts.builder import PromptBuilder
+from app.ai.prompts.builder import PromptBuilder, PromptContext
 from app.ai.pipeline.tool_executor import ToolExecutor
 from app.ai.schemas import AIMessage, MessageRole, ToolCall
 from app.ai.telemetry.logger import telemetry
@@ -16,6 +16,10 @@ from app.modules.ai_conversations.models import AIMessageModel, Conversation
 from app.modules.users.models import User
 from app.modules.organizations.models import Organization
 
+# Import tools for dynamic instantiation
+from app.ai.tools.knowledge_tools import SearchKnowledgeBaseTool, GetDocumentTool, ListDocumentsTool
+from app.modules.knowledge.services import KnowledgeService
+
 
 class AIExecutionPipeline:
     def __init__(self, db: AsyncSession, user: User, organization: Organization, conversation: Conversation):
@@ -23,8 +27,75 @@ class AIExecutionPipeline:
         self.user = user
         self.organization = organization
         self.conversation = conversation
-        # Currently only supporting GoogleProvider
+        # Currently only supporting GoogleProvider for chat
         self.provider = GoogleProvider()
+
+    async def _resolve_tools(self, tool_names: List[str]) -> List[Any]:
+        """Instantiate tools based on names, injecting required context."""
+        instances = []
+        knowledge_service = KnowledgeService(self.db)
+
+        for name in tool_names:
+            if name == "search_knowledge_base":
+                instances.append(SearchKnowledgeBaseTool(knowledge_service, self.organization.id, self.user.id))
+            elif name == "get_document":
+                instances.append(GetDocumentTool(knowledge_service, self.organization.id))
+            elif name == "list_documents":
+                instances.append(ListDocumentsTool(knowledge_service, self.organization.id))
+        return instances
+
+    async def _fetch_implicit_context(self, user_prompt: str) -> List[Dict[str, Any]]:
+        """
+        Implicit RAG: run a quick search on the user's prompt to inject highly relevant
+        context directly into the system prompt, saving a tool call round-trip.
+        """
+        try:
+            knowledge_service = KnowledgeService(self.db)
+            search_resp = await knowledge_service.search(
+                org_id=self.organization.id,
+                user=self.user,
+                query=user_prompt,
+                top_k=3 # Only top 3 for implicit context
+            )
+            
+            documents = []
+            for r in search_resp.results:
+                # Basic relevance threshold
+                if r.score >= 0.70:
+                    documents.append({
+                        "title": r.document_title,
+                        "content": r.content
+                    })
+            return documents
+        except Exception as e:
+            # Don't fail the chat if RAG errors
+            import logging
+            logging.getLogger(__name__).warning(f"Implicit RAG failed: {e}")
+            return []
+
+    async def _fetch_implicit_memory(self, user_prompt: str) -> List[Dict[str, Any]]:
+        """Fetch highly relevant long-term memory for implicit injection."""
+        try:
+            from app.modules.memory.services import MemoryService
+            memory_service = MemoryService(self.db)
+            search_resp = await memory_service.search(
+                organization_id=self.organization.id,
+                query=user_prompt,
+                top_k=5,
+                context="implicit_prompt_injection"
+            )
+            
+            memories = []
+            for m in search_resp:
+                memories.append({
+                    "memory_type": m.memory_type.value,
+                    "content": m.content
+                })
+            return memories
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"Implicit memory fetch failed: {e}")
+            return []
 
     async def execute(self, user_prompt: str) -> AsyncGenerator[str, None]:
         """
@@ -47,17 +118,20 @@ class AIExecutionPipeline:
             yield f"Safety guard blocked execution: {e}"
             return
 
-        # 3. Build Prompt Context
-        context = {
-            "company_name": self.organization.name,
-            "organization_name": self.organization.name,
-            "user_first_name": self.user.first_name,
-            "user_last_name": self.user.last_name,
-        }
+        # 3. Implicit Retrieval
+        implicit_memories = await self._fetch_implicit_memory(user_prompt)
+        implicit_docs = await self._fetch_implicit_context(user_prompt)
+
+        # 4. Build Prompt Context using structured PromptContext
+        context = PromptContext(
+            user=self.user,
+            organization=self.organization,
+            documents=implicit_docs,
+            memories=implicit_memories
+        )
         system_content = PromptBuilder.render(agent.system_prompt_template, context)
 
-        # 4. Load Conversation History (last N messages)
-        # Simplified: We just fetch existing messages and format them
+        # 5. Load Conversation History (last N messages)
         history_models = self.conversation.messages[-10:] # last 10 messages
         
         messages = [AIMessage(role=MessageRole.SYSTEM, content=system_content)]
@@ -85,10 +159,9 @@ class AIExecutionPipeline:
         self.db.add(user_msg_model)
         await self.db.commit()
 
-        # 5. Tool Setup
-        # For Sprint 004, we assume tools are registered in a global place or imported.
-        # Stubbing empty tools for now since actual business tools will be added later.
-        tool_executor = ToolExecutor(tools=[])
+        # 6. Tool Setup
+        agent_tools = await self._resolve_tools(agent.tools)
+        tool_executor = ToolExecutor(tools=agent_tools)
         tool_schemas = tool_executor.get_tool_schemas()
 
         iteration_count = 0
@@ -97,7 +170,7 @@ class AIExecutionPipeline:
         while iteration_count < max_iterations:
             iteration_count += 1
             
-            # 6. Stream from Provider
+            # 7. Stream from Provider
             full_response_text = ""
             async for chunk in self.provider.stream(
                 messages=messages,
@@ -108,19 +181,7 @@ class AIExecutionPipeline:
                 full_response_text += chunk
                 yield chunk
 
-            # We also need the full non-streamed response to check for tool calls.
-            # In many SDKs (like Google's new genai SDK), tool calls might not stream.
-            # For robustness in this implementation, we will use generate() if we suspect tool calls,
-            # but since we are yielding stream chunks above, we assume no tool calls during streaming.
-            # Let's call generate() to handle potential tool calls if needed, OR just rely on generate()
-            # for the entire loop and yield fake chunks. 
-            # To actually stream and handle tools, the provider interface gets complex.
-            # For Sprint 004, we'll do a simple fallback: if the stream ends, we fetch the final structured LLMResponse.
-            
-            # Since we streamed, let's pretend there are no tool calls for this iteration 
-            # unless we implement a custom stream parser.
-            # For now, we will break after one stream iteration.
-            
+            # We exit after the first stream response since full tool calling loop is disabled for Sprint 004
             assistant_msg_model = AIMessageModel(
                 conversation_id=self.conversation.id,
                 role=MessageRole.ASSISTANT,
@@ -129,7 +190,7 @@ class AIExecutionPipeline:
             self.db.add(assistant_msg_model)
             await self.db.commit()
 
-            # 7. Telemetry
+            # 8. Telemetry
             latency = (time.time() - start_time) * 1000
             telemetry.log_execution(
                 request_id=f"req_{self.conversation.id}",
@@ -139,9 +200,10 @@ class AIExecutionPipeline:
                 provider=self.provider.__class__.__name__,
                 model=agent.provider, # assuming provider string acts as model
                 latency_ms=latency,
-                input_tokens=0, # metrics require generate() instead of stream() in many SDKs
+                input_tokens=0,
                 output_tokens=0,
             )
             
-            break # Exit loop as we don't have tool calling logic in the stream path yet
+            break
+
 
