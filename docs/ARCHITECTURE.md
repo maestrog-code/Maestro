@@ -1,7 +1,7 @@
 # MAESTRO — System Architecture
 
 > **Pattern: Modular Monolith → Future Microservices**
-> Last updated: Sprint 004 complete — July 2026
+> Last updated: Sprint 006 complete — July 2026
 
 This document is the authoritative reference for MAESTRO's architecture.
 Every AI tool and developer must read this before making changes.
@@ -38,7 +38,7 @@ Request → API Layer → Service Layer → Repository Layer → Database
 | Task Queue | Celery | 5.3.6 |
 | **AI Provider** | **Google Gemini (google-genai SDK)** | **gemini-2.5-pro** |
 | **Embeddings** | Google text-embedding-004 | Sprint 005 |
-| **Vector Store** | pgvector or Pinecone | Sprint 005, TBD |
+| **Vector Store** | PostgreSQL `pgvector` | Sprint 005 & 006 |
 | Mobile | Flutter | Phase 4 |
 | Web | React + Next.js | Phase 5 |
 | Payments | Stripe / M-Pesa / Airtel Money | Phase 5 |
@@ -59,7 +59,9 @@ Maestro/
 │       │   │   ├── agents/
 │       │   │   │   ├── definitions/     ← ceo.py, cfo.py (AgentDefinition)
 │       │   │   │   └── registry.py      ← AgentRegistry singleton
-│       │   │   ├── memory/              ← Reserved: Sprint 005 vector memory
+│       │   │   ├── embedding/           ← Embedding provider (Google)
+│       │   │   ├── vector_store/        ← Vector DB abstractions (pgvector)
+│       │   │   ├── storage/             ← Object storage (LocalStorage)
 │       │   │   ├── pipeline/
 │       │   │   │   ├── executor.py      ← AIExecutionPipeline (orchestrator)
 │       │   │   │   └── tool_executor.py ← ToolExecutor (retry, timeout, audit)
@@ -74,7 +76,9 @@ Maestro/
 │       │   │   ├── telemetry/
 │       │   │   │   └── logger.py        ← AITelemetryLogger
 │       │   │   ├── tools/
-│       │   │   │   └── base.py          ← BaseTool abstract class
+│       │   │   │   ├── base.py          ← BaseTool abstract class
+│       │   │   │   ├── knowledge_tools.py
+│       │   │   │   └── memory_tools.py
 │       │   │   └── schemas.py           ← MessageRole, AIMessage, LLMResponse
 │       │   ├── api/                     ← HTTP routing
 │       │   │   └── v1/
@@ -91,7 +95,9 @@ Maestro/
 │       │   ├── models/
 │       │   │   └── base.py              ← TimestampedModel (all tables extend this)
 │       │   ├── modules/                 ← Business domain modules
-│       │   │   ├── ai_conversations/    ← Conversation + AIMessageModel (S004)
+│       │   │   ├── ai_conversations/    ← Conversation + AIMessageModel
+│       │   │   ├── knowledge/           ← Knowledge Engine (Sprint 005)
+│       │   │   ├── memory/              ← Memory System (Sprint 006)
 │       │   │   ├── organizations/       ← Organization + OrganizationMember
 │       │   │   ├── permissions/         ← Role + Permission + RolePermission
 │       │   │   └── users/               ← User model, services, schemas
@@ -103,7 +109,9 @@ Maestro/
 │       ├── alembic/
 │       │   └── versions/
 │       │       ├── 001_initial_schema.py
-│       │       └── 002_ai_conversations.py
+│       │       ├── 002_ai_conversations.py
+│       │       ├── 003_knowledge_engine.py
+│       │       └── 004_memory_system.py
 │       └── requirements.txt
 ├── mobile/                         ← Flutter app (Phase 2)
 ├── web/                            ← Next.js web app (Phase 3)
@@ -223,6 +231,62 @@ ai_messages (Sprint 004)
 └── [TimestampedModel fields]
 INDEX (conversation_id)
 INDEX (conversation_id, created_at)  ← composite for history
+
+knowledge_documents (Sprint 005)
+├── id (UUID PK)
+├── organization_id (FK → organizations)
+├── title
+├── file_path
+├── source_type
+├── status
+└── [TimestampedModel fields]
+
+knowledge_chunks (Sprint 005)
+├── id (UUID PK)
+├── document_id (FK → knowledge_documents)
+├── content
+├── chunk_index
+└── [TimestampedModel fields]
+
+knowledge_embeddings (Sprint 005)
+├── id (UUID PK)
+├── chunk_id (FK → knowledge_chunks)
+├── provider
+├── model
+├── dimensions
+├── vector (VECTOR(n))
+└── [TimestampedModel fields]
+
+agent_memories (Sprint 006)
+├── id (UUID PK)
+├── organization_id (FK → organizations)
+├── user_id (nullable)
+├── agent_id (nullable)
+├── content
+├── memory_type (FACT, PREFERENCE, GOAL, etc)
+├── status (ACTIVE, STALE, ARCHIVED, CONFLICTED)
+├── source (conversation, manual, tool, import, system)
+├── importance_score
+├── confidence_score
+├── last_accessed
+├── access_count
+└── [TimestampedModel fields]
+
+memory_embeddings (Sprint 006)
+├── id (UUID PK)
+├── memory_id (FK → agent_memories)
+├── provider
+├── model
+├── dimensions
+├── vector (VECTOR(n))
+└── [TimestampedModel fields]
+
+memory_access_logs (Sprint 006)
+├── id (UUID PK)
+├── memory_id (FK → agent_memories)
+├── organization_id (FK → organizations)
+├── context
+└── [TimestampedModel fields]
 ```
 
 ---
@@ -354,18 +418,23 @@ POST /organizations/{org_id}/ai/chat
     ┌──────────────────────────────────┐
     │  1. Resolve Agent (registry)     │
     │  2. Safety Guards (injection/PII)│
-    │  3. Build Prompt (builder)       │
-    │  4. Load Conversation History    │
-    │  5. Stream → Provider            │
-    │  6. Persist Messages (DB)        │
-    │  7. Log Telemetry                │
+    │  3. Implicit Memory Retrieval    │
+    │  4. Implicit Knowledge Retrieval │
+    │  5. Build Prompt (builder)       │
+    │  6. Load Conversation History    │
+    │  7. Stream → Provider            │
+    │  8. Persist Messages (DB)        │
+    │  9. Log Telemetry                │
     └──────────────────────────────────┘
         │
     GoogleProvider.stream()
         │
     SSE chunks → client
+        │
+    (Async via Celery)
+    extract_conversation_memories_task
 ```
 
 ---
 
-*Last updated: Sprint 004 complete — July 2026*
+*Last updated: Sprint 006 complete — July 2026*

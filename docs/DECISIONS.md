@@ -107,4 +107,18 @@
 
 ---
 
-*Last updated: Sprint 002 — July 2026*
+## DEC-015 — Vector Storage with pgvector
+**Decision:** Use PostgreSQL with the `pgvector` extension for storing and querying embeddings, rather than a standalone vector database like Pinecone.
+**Date:** Sprint 005
+**Reason:** Reduces infrastructure complexity by keeping transactional and vector data in the same datastore. Allows simple joins between business data and embeddings, making organization-scoping enforced at the SQL level.
+
+---
+
+## DEC-016 — Hybrid Deduplicated Memory Extraction
+**Decision:** Memory extraction is handled asynchronously via Celery using Gemini's Structured Output functionality, with vector similarity deduplication during insertion.
+**Date:** Sprint 006
+**Reason:** Prevents LLM extraction latency from blocking the main conversation loop. Vector similarity checks (threshold > 0.92) before inserting a new memory prevents the database from exploding with duplicate facts over time.
+
+---
+
+*Last updated: Sprint 006 — July 2026*

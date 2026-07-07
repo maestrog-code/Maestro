@@ -16,9 +16,11 @@ organization's own data.
 | 001 | Backend Foundation | ✅ Done |
 | 002 | Authentication & Security | ✅ Done |
 | 003 | Organizations & Multi-tenancy | ✅ Done |
-| 004 | AI Executive Engine v1 | ✅ Done — `sprint-004` |
+| 004 | AI Executive Engine v1 | ✅ Done |
+| 005 | Organizational Knowledge Engine | ✅ Done |
+| 006 | Agent Memory System | ✅ Done — `sprint-006` |
 | v0.1.0 | Stabilisation Milestone | 🔄 In Progress |
-| 005 | Organizational Knowledge Engine | ⬜ Planned |
+| 007 | Agent Orchestration Engine | ⬜ Planned |
 
 ---
 
@@ -85,4 +87,4 @@ alembic upgrade head
 
 ---
 
-*Sprint 004 complete — tag `sprint-004` — July 2026*
+*Sprint 006 complete — tag `sprint-006` — July 2026*

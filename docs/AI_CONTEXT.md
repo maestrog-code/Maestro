@@ -33,44 +33,30 @@ organization's own data.
 
 **Tag:** `sprint-004` | **Version:** `v0.1.0` (stabilisation in progress)
 
-### ✅ Fully Built (Sprints 001–004 — COMPLETE)
+### ✅ Fully Built (Sprints 001–006 — COMPLETE)
 
-**Foundation**
+**Foundation (S001-S003)**
 - Backend: FastAPI + SQLAlchemy 2.0 async + PostgreSQL 16 + Redis + Celery
-- `TimestampedModel` base with UUID PKs, soft delete, audit fields, optimistic locking
-- Docker Compose development environment
-- Alembic migrations: `001_initial_schema`, `002_ai_conversations`
-- GitHub Actions CI (Python 3.12, PostgreSQL 16, Redis 7)
-
-**Auth & Identity (Sprint 002)**
-- User registration, login, JWT access tokens, Argon2 password hashing
-- Refresh token rotation, token revocation, audit logging
-- `get_current_user` FastAPI dependency
-
-**Organizations & RBAC (Sprint 003)**
-- Organizations, OrganizationMember, Role, Permission, RolePermission models
-- Full CRUD for users and organizations
-- Membership management: invite, remove, role assignment
-- `require_member`, `require_owner` authorization helpers
-- Organization-scoped multi-tenancy enforced throughout
+- Organizations & RBAC, Multi-tenancy, Auth, JWT, UUIDs.
 
 **AI Executive Engine (Sprint 004)**
-- `app/core/ai_settings.py` — AI runtime config via `AI_` env prefix
-- `app/ai/providers/base.py` — `BaseLLMProvider` (generate, stream, embeddings)
-- `app/ai/providers/google.py` — Google Gemini (google-genai SDK)
-- `app/ai/agents/registry.py` — Agent registry with `AgentDefinition`
-- `app/ai/agents/definitions/` — CEO and CFO agent definitions
-- `app/ai/prompts/builder.py` — Markdown template renderer with `{{variable}}` interpolation
-- `app/ai/prompts/templates/` — Externalized system prompts (ceo_system.md, cfo_system.md)
-- `app/ai/tools/base.py` — `BaseTool` abstract class with `get_json_schema()`
-- `app/ai/pipeline/executor.py` — `AIExecutionPipeline` (agent → safety → prompt → provider → persist → telemetry)
-- `app/ai/pipeline/tool_executor.py` — `ToolExecutor` (permission check → validation → timeout → retry → audit log)
-- `app/ai/safety/guards.py` — Prompt injection detection + PII redaction guards
-- `app/ai/telemetry/logger.py` — Structured execution telemetry (provider, model, cost, retries, latency)
-- `app/modules/ai_conversations/` — Conversation persistence module (full models/schemas/services/repos/router)
-- `POST /organizations/{org_id}/ai/chat` — SSE streaming endpoint
+- `app/ai/pipeline/executor.py`, Gemini Provider, Safety Guards.
+- CEO/CFO agent definitions.
 
-### 🔄 Next: v0.1.0 Stabilisation (Before Sprint 005)
+**Organizational Knowledge Engine (Sprint 005)**
+- RAG pipeline for organization documents.
+- `knowledge_documents`, `knowledge_chunks`, `knowledge_embeddings`.
+- `pgvector` store, asynchronous embedding via Celery.
+- Implicit RAG injection before prompt building.
+
+**The Memory System (Sprint 006)**
+- Long-term memory for AI agents across sessions.
+- `agent_memories`, `memory_embeddings`, `memory_access_logs`.
+- Explicit tools (`remember_fact`, `forget_fact`) + Implicit memory context injection.
+- Asynchronous Celery extraction using Gemini Structured Outputs.
+- Deduplication via Vector Similarity (> 0.92) and Weighted Ranking.
+
+### 🔄 Next: v0.1.0 Stabilisation
 - CI passes consistently
 - Docker verified from clean clone
 - Alembic migrations verified from zero
@@ -81,20 +67,12 @@ organization's own data.
 
 ## Current Sprint
 
-**Sprint 005 — Organizational Knowledge Engine**
-**Branch:** `feature/organizational-knowledge-engine` (to be created)
+**Sprint 007 — Agent Orchestration Engine**
+**Branch:** `feature/agent-orchestration-engine` (to be created)
 
-### Sprint 005 Goals
+### Sprint 007 Goals
 
-Give every AI executive access to organization-specific knowledge via a RAG pipeline.
-
-1. **Knowledge Sources** — File uploads (PDF, DOCX, TXT, Markdown), notes, policies, SOPs
-2. **Document Processing** — Text extraction, chunking, metadata generation
-3. **Embeddings** — Pluggable embedding provider, batch indexing, re-index support
-4. **Vector Store** — Organization-scoped storage, semantic search, metadata filtering
-5. **Retrieval Pipeline** — Hybrid retrieval, context assembly, citation support
-6. **Knowledge Tools** — `search_knowledge_base`, `get_document`, `list_documents`
-7. **Security** — Organization isolation, permission-aware retrieval, document-level access controls
+Agents that can delegate subtasks, plan across multiple steps, and coordinate with other agents (e.g. CEO delegating to CFO).
 
 ---
 
@@ -297,15 +275,16 @@ No changes required in the pipeline.
 | 002 | Auth + Multi-tenant Structure | — | ✅ Done |
 | 003 | User & Organization CRUD | — | ✅ Done |
 | 004 | AI Executive Engine v1 | 10/10 | ✅ Done |
+| 005 | Organizational Knowledge Engine | 9.9/10 | ✅ Done |
+| 006 | The Memory System | 9.95/10| ✅ Done |
 | v0.1.0 | Stabilisation Milestone | — | 🔄 Next |
-| 005 | Organizational Knowledge Engine | — | ⬜ Planned |
-| 006 | Intelligent Planning & Multi-Agent | — | ⬜ Planned |
-| 007 | Business Tools (CRM, Finance, HR) | — | ⬜ Planned |
-| 008 | Autonomous Workflows | — | ⬜ Planned |
-| 009 | Executive Dashboards & Analytics | — | ⬜ Planned |
-| 010 | Production Hardening | — | ⬜ Planned |
+| 007 | Agent Orchestration Engine | — | ⬜ Planned |
+| 008 | Business Tools (CRM, Finance, HR) | — | ⬜ Planned |
+| 009 | Autonomous Workflows | — | ⬜ Planned |
+| 010 | Executive Dashboards & Analytics | — | ⬜ Planned |
+| 011 | Production Hardening | — | ⬜ Planned |
 
 ---
 
-*Last updated: Sprint 004 complete — July 2026*
+*Last updated: Sprint 006 complete — July 2026*
 *Feed this document to any AI before starting a new session on MAESTRO.*
