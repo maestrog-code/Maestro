@@ -20,6 +20,7 @@ from app.modules.users.models import User  # noqa: F401
 from app.modules.organizations.models import Organization, OrganizationMember  # noqa: F401
 from app.modules.permissions.models import Role, Permission, RolePermission  # noqa: F401
 from app.core.auth.models import RefreshToken, AuditLog  # noqa: F401
+from app.modules.ai_conversations.models import Conversation, AIMessageModel  # noqa: F401
 from app.core.config import settings
 
 config = context.config
