@@ -24,59 +24,96 @@ It combines operations, payments, AI executive agents, inventory, CRM, invoicing
 and analytics into a single mobile-first application.
 
 The AI layer is not a chatbot. It is a team of specialized AI executives (CEO, CFO, COO, etc.)
-that analyse the business and provide proactive, actionable recommendations.
+that analyse the business and provide proactive, actionable recommendations grounded in each
+organization's own data.
+
+---
+
+## Current State
+
+**Tag:** `sprint-004` | **Version:** `v0.1.0` (stabilisation in progress)
+
+### ✅ Fully Built (Sprints 001–004 — COMPLETE)
+
+**Foundation**
+- Backend: FastAPI + SQLAlchemy 2.0 async + PostgreSQL 16 + Redis + Celery
+- `TimestampedModel` base with UUID PKs, soft delete, audit fields, optimistic locking
+- Docker Compose development environment
+- Alembic migrations: `001_initial_schema`, `002_ai_conversations`
+- GitHub Actions CI (Python 3.12, PostgreSQL 16, Redis 7)
+
+**Auth & Identity (Sprint 002)**
+- User registration, login, JWT access tokens, Argon2 password hashing
+- Refresh token rotation, token revocation, audit logging
+- `get_current_user` FastAPI dependency
+
+**Organizations & RBAC (Sprint 003)**
+- Organizations, OrganizationMember, Role, Permission, RolePermission models
+- Full CRUD for users and organizations
+- Membership management: invite, remove, role assignment
+- `require_member`, `require_owner` authorization helpers
+- Organization-scoped multi-tenancy enforced throughout
+
+**AI Executive Engine (Sprint 004)**
+- `app/core/ai_settings.py` — AI runtime config via `AI_` env prefix
+- `app/ai/providers/base.py` — `BaseLLMProvider` (generate, stream, embeddings)
+- `app/ai/providers/google.py` — Google Gemini (google-genai SDK)
+- `app/ai/agents/registry.py` — Agent registry with `AgentDefinition`
+- `app/ai/agents/definitions/` — CEO and CFO agent definitions
+- `app/ai/prompts/builder.py` — Markdown template renderer with `{{variable}}` interpolation
+- `app/ai/prompts/templates/` — Externalized system prompts (ceo_system.md, cfo_system.md)
+- `app/ai/tools/base.py` — `BaseTool` abstract class with `get_json_schema()`
+- `app/ai/pipeline/executor.py` — `AIExecutionPipeline` (agent → safety → prompt → provider → persist → telemetry)
+- `app/ai/pipeline/tool_executor.py` — `ToolExecutor` (permission check → validation → timeout → retry → audit log)
+- `app/ai/safety/guards.py` — Prompt injection detection + PII redaction guards
+- `app/ai/telemetry/logger.py` — Structured execution telemetry (provider, model, cost, retries, latency)
+- `app/modules/ai_conversations/` — Conversation persistence module (full models/schemas/services/repos/router)
+- `POST /organizations/{org_id}/ai/chat` — SSE streaming endpoint
+
+### 🔄 Next: v0.1.0 Stabilisation (Before Sprint 005)
+- CI passes consistently
+- Docker verified from clean clone
+- Alembic migrations verified from zero
+- Docs updated
+- `v0.1.0` tag
 
 ---
 
 ## Current Sprint
 
-**Sprint 004 — AI Executive Engine**
-**Branch:** `feature/ai-executive-engine` (to be created)
+**Sprint 005 — Organizational Knowledge Engine**
+**Branch:** `feature/organizational-knowledge-engine` (to be created)
 
-### What is fully built (Sprints 001, 002, & 003 — COMPLETE ✅)
-- Backend foundation (FastAPI, SQLAlchemy async, PostgreSQL, Redis, Celery)
-- `TimestampedModel` base with UUID PKs, soft delete, audit fields, optimistic locking
-- User, Organization, OrganizationMember models
-- Role, Permission, RolePermission models
-- RefreshToken, AuditLog models
-- Authentication: Register, login, protected routes via JWT
-- Organization management: Create org (with atomic transaction + unique slug generation), list orgs, get org
-- Membership management: Invite member, remove member, change roles
-- Centralized authorization helpers: `require_member`, `require_owner`
-- Event dispatcher with domain events (`ORGANIZATION_CREATED`, `MEMBER_INVITED`, etc.)
-- Full CRUD `BaseRepository` (persistence only)
-- Alembic migrations
-- E2E tests for auth, users, and organizations
-- Master context docs: `docs/` (PROJECT_VISION, ARCHITECTURE, ROADMAP, DECISIONS, AI_CONTEXT)
-- All code on `main` branch on GitHub
+### Sprint 005 Goals
 
-### Sprint 004 Goals
-Establish the core AI runtime and execution platform so that future agents (CEO, CFO, COO) can be easily added.
-The engine must include:
-1. **AI Router**: Receives requests and selects the appropriate executive agent.
-2. **Agent Registry**: For discovering and registering available AI executives.
-3. **Conversation Memory**: Organization-scoped context and session management.
-4. **Prompt Management**: Versioned system prompts and templates.
-5. **Tool Execution Framework**: Allowing agents to safely invoke business tools.
-6. **Execution Pipeline**: Supporting request → planning → tool use → response.
-7. **Streaming Responses**: Via Server-Sent Events or WebSockets.
-8. **Observability**: Execution logs, latency, token usage, and failures.
+Give every AI executive access to organization-specific knowledge via a RAG pipeline.
+
+1. **Knowledge Sources** — File uploads (PDF, DOCX, TXT, Markdown), notes, policies, SOPs
+2. **Document Processing** — Text extraction, chunking, metadata generation
+3. **Embeddings** — Pluggable embedding provider, batch indexing, re-index support
+4. **Vector Store** — Organization-scoped storage, semantic search, metadata filtering
+5. **Retrieval Pipeline** — Hybrid retrieval, context assembly, citation support
+6. **Knowledge Tools** — `search_knowledge_base`, `get_document`, `list_documents`
+7. **Security** — Organization isolation, permission-aware retrieval, document-level access controls
 
 ---
 
 ## Technology Stack
 
 ```
-Backend:   Python 3.12 + FastAPI 0.110.0
-ORM:       SQLAlchemy 2.0 (async)
-Database:  PostgreSQL 16
-Auth:      JWT (python-jose) + Argon2 (passlib)
-Cache:     Redis 7
-Queue:     Celery 5.3.6
-AI:        Gemini (Google AI Pro)
-Mobile:    Flutter (Phase 2)
-Web:       React + Next.js (Phase 3)
-Payments:  Stripe, M-Pesa, Airtel Money (Phase 4)
+Backend:    Python 3.12 + FastAPI 0.110.0
+ORM:        SQLAlchemy 2.0 (async, asyncpg)
+Database:   PostgreSQL 16
+Auth:       JWT (python-jose) + Argon2 (passlib)
+Cache:      Redis 7
+Queue:      Celery 5.3.6
+AI:         Google Gemini (google-genai SDK) — gemini-2.5-pro
+Embeddings: Google text-embedding-004 (Sprint 005)
+Vector DB:  pgvector or Pinecone (Sprint 005, TBD)
+Mobile:     Flutter (Phase 4)
+Web:        React + Next.js (Phase 5)
+Payments:   Stripe, M-Pesa, Airtel Money (Phase 5)
+CI:         GitHub Actions (.github/workflows/backend-ci.yml)
 ```
 
 ---
@@ -87,31 +124,85 @@ Payments:  Stripe, M-Pesa, Airtel Money (Phase 4)
 backend/maestro/app/
 ├── main.py
 ├── ai/
-│   ├── agents/          ← CEO, CFO, COO, etc.
-│   ├── memory/          ← Agent memory / context
-│   ├── router/          ← AI API endpoints
-│   └── tools/           ← Agent callable tools
-├── api/v1/              ← HTTP route registration
+│   ├── agents/
+│   │   ├── definitions/     ← ceo.py, cfo.py — AgentDefinition instances
+│   │   └── registry.py      ← AgentRegistry singleton
+│   ├── memory/              ← Reserved for Sprint 005 (vector memory)
+│   ├── pipeline/
+│   │   ├── executor.py      ← AIExecutionPipeline (main orchestrator)
+│   │   └── tool_executor.py ← ToolExecutor (permission, validate, retry, audit)
+│   ├── prompts/
+│   │   ├── builder.py       ← PromptBuilder.render(template, context)
+│   │   └── templates/       ← Markdown system prompt files
+│   ├── providers/
+│   │   ├── base.py          ← BaseLLMProvider (generate, stream, embeddings)
+│   │   └── google.py        ← GoogleProvider (Gemini)
+│   ├── router/              ← Empty — AI routes live in modules/ai_conversations/
+│   ├── safety/
+│   │   └── guards.py        ← AISafetyGuards (injection, PII)
+│   ├── telemetry/
+│   │   └── logger.py        ← AITelemetryLogger
+│   ├── tools/
+│   │   └── base.py          ← BaseTool abstract class
+│   └── schemas.py           ← MessageRole, AIMessage, LLMResponse, ToolCall
+├── api/v1/                  ← HTTP route registration
+│   └── router.py
 ├── core/
-│   ├── auth/            ← JWT, refresh tokens, audit logs
-│   ├── config.py        ← Settings (Pydantic BaseSettings)
-│   ├── database.py      ← Async DB engine
-│   ├── events/          ← Event bus
-│   ├── logger.py        ← Logging
-│   └── security/        ← JWT utils, password hashing
-├── dependencies/        ← FastAPI DI (get_current_user, get_db)
-├── middleware/          ← Request middleware
-├── models/base.py       ← TimestampedModel
+│   ├── ai_settings.py       ← AISettings (AI_ env prefix)
+│   ├── auth/                ← JWT, refresh tokens, audit logs
+│   ├── config.py            ← Settings (Pydantic BaseSettings)
+│   ├── database.py          ← Async DB engine & session
+│   ├── events/              ← Event bus
+│   ├── logger.py            ← Structured logging
+│   └── security/            ← Password hashing, JWT utils
+├── dependencies/            ← FastAPI DI (auth, db)
+├── middleware/              ← Request middleware
+├── models/base.py           ← TimestampedModel (all tables extend this)
 ├── modules/
-│   ├── organizations/   ← Organization, OrganizationMember
-│   ├── permissions/     ← Role, Permission, RolePermission
-│   └── users/           ← User
-├── repositories/        ← Base repository
-├── schemas/             ← Shared Pydantic schemas
-├── services/            ← Shared services
-├── shared/utils/        ← Cross-cutting utilities
-└── workers/             ← Celery tasks
+│   ├── ai_conversations/    ← Conversation + AIMessageModel (Sprint 004)
+│   ├── organizations/       ← Organization, OrganizationMember
+│   ├── permissions/         ← Role, Permission, RolePermission
+│   └── users/               ← User model, services, schemas
+├── repositories/            ← BaseRepository with CRUD
+├── schemas/                 ← Shared Pydantic schemas
+├── services/                ← Shared services
+├── shared/utils/            ← Cross-cutting utilities
+└── workers/                 ← Celery tasks
 ```
+
+---
+
+## AI Runtime Architecture
+
+```
+POST /organizations/{org_id}/ai/chat
+        │
+    router.py (ai_conversations)
+        │
+    AIConversationService.chat_stream()
+        │
+    AIExecutionPipeline.execute()
+        │
+    ┌───────────────────────────────┐
+    │  1. Resolve Agent (registry)  │
+    │  2. Safety Guards             │
+    │  3. Build Prompt (builder)    │
+    │  4. Load History              │
+    │  5. Stream → Provider         │
+    │  6. Persist Messages          │
+    │  7. Log Telemetry             │
+    └───────────────────────────────┘
+        │
+    GoogleProvider.stream()
+        │
+    SSE chunks → client
+```
+
+**Adding a new agent:** Create `app/ai/agents/definitions/{role}.py`, define an `AgentDefinition`,
+call `registry.register(agent)`, and add a Markdown template to `app/ai/prompts/templates/`.
+
+**Adding a new provider:** Implement `BaseLLMProvider` in `app/ai/providers/{name}.py`.
+No changes required in the pipeline.
 
 ---
 
@@ -130,16 +221,27 @@ backend/maestro/app/
 7. **Audit everything.** Every write operation should create an `AuditLog` entry.
 8. **Passwords use Argon2** via `passlib`. Never store plain text.
 9. **Secrets come from environment variables.** Never hardcode secrets.
+10. **AI configuration lives in `ai_settings`.** Never hardcode model names, temperatures, or token limits inside providers or agents.
+11. **Every Alembic migration must have a `downgrade()` path.**
+12. **Provider abstraction must be preserved.** The pipeline must never import a specific provider directly — use the `BaseLLMProvider` interface.
 
 ---
 
 ## Database Conventions
 
-- Table names: `snake_case`, plural (e.g., `organizations`, `audit_logs`)
+- Table names: `snake_case`, plural (e.g., `organizations`, `ai_conversations`)
 - Column names: `snake_case`
-- Foreign keys: `{table_singular}_id` (e.g., `organization_id`, `user_id`)
+- Foreign keys: `{table_singular}_id` (e.g., `organization_id`, `conversation_id`)
 - FK constraints: include `ondelete` action (`CASCADE` or `SET NULL`)
 - Unique constraints: named `uq_{table}_{columns}` (e.g., `uq_org_user`)
+- Composite indexes: named `ix_{table}_{col1}_{col2}` (e.g., `ix_ai_conversations_org_created`)
+
+## Database Schema Summary
+
+| Migration | Tables Created |
+|---|---|
+| `001_initial_schema` | `users`, `organizations`, `organization_members`, `roles`, `permissions`, `role_permissions`, `refresh_tokens`, `audit_logs` |
+| `002_ai_conversations` | `ai_conversations`, `ai_messages`, `message_role_enum` (PostgreSQL ENUM) |
 
 ---
 
@@ -148,9 +250,9 @@ backend/maestro/app/
 - Base URL: `/api/v1/`
 - Auth: Bearer JWT in `Authorization` header
 - All IDs in URLs and responses are UUIDs (strings)
-- Response format: JSON, camelCase keys in responses (Pydantic handles this)
 - Pagination: `?page=1&page_size=20`
 - Error responses: `{"detail": "message"}` (FastAPI default)
+- AI streaming: `text/event-stream` (SSE), `event: end` signals completion
 
 ---
 
@@ -165,21 +267,8 @@ backend/maestro/app/
 | DB tables | snake_case, plural | `organization_members` |
 | Schemas | `{Model}{Action}` | `UserCreate`, `UserResponse` |
 | Routers | `{module}_router` | `auth_router` |
-
----
-
-## Module Structure Template
-
-Every module (`modules/xxx/` or `core/xxx/`) must have:
-
-```
-xxx/
-├── models.py       ← SQLAlchemy models (tables)
-├── schemas.py      ← Pydantic request/response models
-├── services.py     ← Business logic
-├── repositories.py ← Database queries
-└── router.py       ← FastAPI route handlers
-```
+| Agents | `{ROLE}` uppercase | `"CEO"`, `"CFO"` |
+| Prompt templates | `{agent_role}_system.md` | `ceo_system.md` |
 
 ---
 
@@ -194,34 +283,29 @@ xxx/
 - ❌ Do not hardcode secrets, URLs, or credentials
 - ❌ Do not skip the `organization_id` filter on business data queries
 - ❌ Do not generate entire "apps" in one prompt — follow the sprint structure
-
----
-
-## Current Open Tasks (Sprint 004)
-
-1. Create branch `feature/ai-executive-engine`
-2. Implement **Conversation Memory** (DB models and schemas for threads/messages)
-3. Implement **Agent Registry & Prompt Management** (Hardcoded configurations or DB models)
-4. Implement **Tool Execution Framework**
-5. Implement **Execution Pipeline & AI Router** (LangChain/LlamaIndex or raw provider SDK)
-6. Implement **Streaming Responses** endpoint
-7. Implement **Observability** tracking for AI usage
-8. Wire AI routers into `api/v1/router.py`
-9. Write tests for AI components using mock LLM responses
+- ❌ Do not hardcode model names or temperatures — use `ai_settings`
+- ❌ Do not import `GoogleProvider` directly in the pipeline — use `BaseLLMProvider`
+- ❌ Do not write an Alembic migration without a `downgrade()` function
 
 ---
 
 ## Sprint History
 
-| Sprint | Goal | Status |
-|---|---|---|
-| 001 | Backend Foundation | ✅ Done |
-| 002 | Auth + Multi-tenant Structure | ✅ Done |
-| 003 | User & Organization CRUD | ✅ Done |
-| 004 | AI Executive Engine (v1) | 🔄 In Progress |
-| 005 | Dashboard Foundation | ⬜ Planned |
+| Sprint | Goal | Score | Status |
+|---|---|---|---|
+| 001 | Backend Foundation | — | ✅ Done |
+| 002 | Auth + Multi-tenant Structure | — | ✅ Done |
+| 003 | User & Organization CRUD | — | ✅ Done |
+| 004 | AI Executive Engine v1 | 10/10 | ✅ Done |
+| v0.1.0 | Stabilisation Milestone | — | 🔄 Next |
+| 005 | Organizational Knowledge Engine | — | ⬜ Planned |
+| 006 | Intelligent Planning & Multi-Agent | — | ⬜ Planned |
+| 007 | Business Tools (CRM, Finance, HR) | — | ⬜ Planned |
+| 008 | Autonomous Workflows | — | ⬜ Planned |
+| 009 | Executive Dashboards & Analytics | — | ⬜ Planned |
+| 010 | Production Hardening | — | ⬜ Planned |
 
 ---
 
-*Last updated: Sprint 004 — July 2026*
+*Last updated: Sprint 004 complete — July 2026*
 *Feed this document to any AI before starting a new session on MAESTRO.*

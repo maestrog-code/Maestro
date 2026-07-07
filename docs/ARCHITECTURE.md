@@ -1,6 +1,7 @@
 # MAESTRO — System Architecture
 
 > **Pattern: Modular Monolith → Future Microservices**
+> Last updated: Sprint 004 complete — July 2026
 
 This document is the authoritative reference for MAESTRO's architecture.
 Every AI tool and developer must read this before making changes.
@@ -27,7 +28,7 @@ Request → API Layer → Service Layer → Repository Layer → Database
 | Layer | Technology | Version |
 |---|---|---|
 | Backend Framework | FastAPI | 0.110.0 |
-| Language | Python | 3.12 |
+| Language | Python | **3.12** (pinned) |
 | ORM | SQLAlchemy | 2.0.29 (async) |
 | Database | PostgreSQL | 16 |
 | Migrations | Alembic | 1.13.1 |
@@ -35,11 +36,14 @@ Request → API Layer → Service Layer → Repository Layer → Database
 | Auth | JWT (python-jose) + Argon2 | — |
 | Cache | Redis | 7 |
 | Task Queue | Celery | 5.3.6 |
-| Mobile | Flutter | Latest stable |
-| Web | React + Next.js | TBD (Phase 3) |
-| Payments | Stripe / M-Pesa / Airtel Money | TBD (Phase 4) |
+| **AI Provider** | **Google Gemini (google-genai SDK)** | **gemini-2.5-pro** |
+| **Embeddings** | Google text-embedding-004 | Sprint 005 |
+| **Vector Store** | pgvector or Pinecone | Sprint 005, TBD |
+| Mobile | Flutter | Phase 4 |
+| Web | React + Next.js | Phase 5 |
+| Payments | Stripe / M-Pesa / Airtel Money | Phase 5 |
 | Containerisation | Docker + Docker Compose | — |
-| CI/CD | GitHub Actions | — |
+| CI/CD | GitHub Actions | backend-ci.yml |
 
 ---
 
@@ -51,35 +55,55 @@ Maestro/
 │   └── maestro/
 │       ├── app/                    ← Application code
 │       │   ├── main.py
-│       │   ├── ai/                 ← AI agent layer
-│       │   │   ├── agents/         ← CEO, CFO, COO, etc.
-│       │   │   ├── memory/         ← Agent memory / context
-│       │   │   ├── router/         ← AI API endpoints
-│       │   │   └── tools/          ← Agent tools / functions
-│       │   ├── api/                ← HTTP routing
+│       │   ├── ai/                      ← AI Executive Engine
+│       │   │   ├── agents/
+│       │   │   │   ├── definitions/     ← ceo.py, cfo.py (AgentDefinition)
+│       │   │   │   └── registry.py      ← AgentRegistry singleton
+│       │   │   ├── memory/              ← Reserved: Sprint 005 vector memory
+│       │   │   ├── pipeline/
+│       │   │   │   ├── executor.py      ← AIExecutionPipeline (orchestrator)
+│       │   │   │   └── tool_executor.py ← ToolExecutor (retry, timeout, audit)
+│       │   │   ├── prompts/
+│       │   │   │   ├── builder.py       ← PromptBuilder.render(template, ctx)
+│       │   │   │   └── templates/       ← ceo_system.md, cfo_system.md
+│       │   │   ├── providers/
+│       │   │   │   ├── base.py          ← BaseLLMProvider (generate/stream/embed)
+│       │   │   │   └── google.py        ← GoogleProvider (Gemini)
+│       │   │   ├── safety/
+│       │   │   │   └── guards.py        ← Prompt injection + PII guards
+│       │   │   ├── telemetry/
+│       │   │   │   └── logger.py        ← AITelemetryLogger
+│       │   │   ├── tools/
+│       │   │   │   └── base.py          ← BaseTool abstract class
+│       │   │   └── schemas.py           ← MessageRole, AIMessage, LLMResponse
+│       │   ├── api/                     ← HTTP routing
 │       │   │   └── v1/
-│       │   ├── core/               ← Platform-level concerns
-│       │   │   ├── auth/           ← JWT, refresh tokens, audit logs
-│       │   │   ├── config.py       ← Settings
-│       │   │   ├── database.py     ← DB engine & session
-│       │   │   ├── events/         ← Event bus
-│       │   │   ├── logger.py       ← Structured logging
-│       │   │   └── security/       ← Password hashing, JWT utils
-│       │   ├── dependencies/       ← FastAPI DI (auth, db, etc.)
-│       │   ├── middleware/         ← Request middleware
+│       │   ├── core/                    ← Platform-level concerns
+│       │   │   ├── ai_settings.py       ← AISettings (AI_ env prefix)
+│       │   │   ├── auth/                ← JWT, refresh tokens, audit logs
+│       │   │   ├── config.py            ← Settings
+│       │   │   ├── database.py          ← DB engine & session
+│       │   │   ├── events/              ← Event bus
+│       │   │   ├── logger.py            ← Structured logging
+│       │   │   └── security/            ← Password hashing, JWT utils
+│       │   ├── dependencies/            ← FastAPI DI (auth, db)
+│       │   ├── middleware/              ← Request middleware
 │       │   ├── models/
-│       │   │   └── base.py         ← TimestampedModel (all tables extend this)
-│       │   ├── modules/            ← Business domain modules
-│       │   │   ├── organizations/  ← Organization + OrganizationMember
-│       │   │   ├── permissions/    ← Role + Permission + RolePermission
-│       │   │   └── users/          ← User model, services, schemas
-│       │   ├── repositories/       ← Base repository pattern
-│       │   ├── schemas/            ← Shared Pydantic schemas
-│       │   ├── services/           ← Shared services
-│       │   ├── shared/             ← Cross-cutting utilities
-│       │   ├── utils/              ← Helpers
-│       │   └── workers/            ← Celery tasks
-│       ├── alembic/                ← DB migration files
+│       │   │   └── base.py              ← TimestampedModel (all tables extend this)
+│       │   ├── modules/                 ← Business domain modules
+│       │   │   ├── ai_conversations/    ← Conversation + AIMessageModel (S004)
+│       │   │   ├── organizations/       ← Organization + OrganizationMember
+│       │   │   ├── permissions/         ← Role + Permission + RolePermission
+│       │   │   └── users/               ← User model, services, schemas
+│       │   ├── repositories/            ← BaseRepository with CRUD
+│       │   ├── schemas/                 ← Shared Pydantic schemas
+│       │   ├── services/                ← Shared services
+│       │   ├── shared/                  ← Cross-cutting utilities
+│       │   └── workers/                 ← Celery tasks
+│       ├── alembic/
+│       │   └── versions/
+│       │       ├── 001_initial_schema.py
+│       │       └── 002_ai_conversations.py
 │       └── requirements.txt
 ├── mobile/                         ← Flutter app (Phase 2)
 ├── web/                            ← Next.js web app (Phase 3)
@@ -175,6 +199,30 @@ audit_logs
 ├── user_agent
 ├── details (JSON)
 └── [TimestampedModel fields]
+
+ai_conversations (Sprint 004)
+├── id (UUID PK)
+├── organization_id (FK → organizations, CASCADE)
+├── title (nullable)
+├── active_agent (nullable — e.g. "CEO", "CFO")
+├── provider (nullable — e.g. "google")
+├── model (nullable — e.g. "gemini-2.5-pro")
+├── temperature (nullable float)
+└── [TimestampedModel fields]
+INDEX (organization_id)
+INDEX (organization_id, created_at)  ← composite for listing
+
+ai_messages (Sprint 004)
+├── id (UUID PK)
+├── conversation_id (FK → ai_conversations, CASCADE)
+├── role (message_role_enum: system | user | assistant | tool)
+├── content (TEXT)
+├── name (nullable — tool name when role=tool)
+├── tool_calls (JSON nullable — list of ToolCall dicts)
+├── tool_call_id (nullable — correlation id for tool results)
+└── [TimestampedModel fields]
+INDEX (conversation_id)
+INDEX (conversation_id, created_at)  ← composite for history
 ```
 
 ---
@@ -243,11 +291,12 @@ Event types live in `app/core/events/types.py`.
 - **Auth endpoints:** `/api/v1/auth/`
 - **User endpoints:** `/api/v1/users/`
 - **Org endpoints:** `/api/v1/organizations/`
-- **AI endpoints:** `/api/v1/ai/`
+- **AI endpoints:** `/api/v1/organizations/{org_id}/ai/`
 - All responses use **camelCase** in JSON
 - All IDs are **UUIDs** (never integers)
 - Pagination: `?page=1&page_size=20`
 - Soft deletes: `is_deleted=true` — never hard delete business data
+- AI streaming: `Content-Type: text/event-stream` (SSE), `event: end` signals completion
 
 ---
 
@@ -286,7 +335,37 @@ Event types live in `app/core/events/types.py`.
 5. **Audit logs** — every write operation logs to `audit_logs`
 6. **CORS** — whitelist only; configured in `core/config.py`
 7. **Rate limiting** — to be implemented in `middleware/`
+8. **AI configuration in `ai_settings` only** — model names, temperatures, and token limits must never be hardcoded in providers or agents
+9. **Provider abstraction preserved** — pipeline never imports a concrete provider directly
 
 ---
 
-*Last updated: Sprint 002 — July 2026*
+## AI Runtime Flow
+
+```
+POST /organizations/{org_id}/ai/chat
+        │
+    router.py (ai_conversations)
+        │
+    AIConversationService.chat_stream()
+        │
+    AIExecutionPipeline.execute()
+        │
+    ┌──────────────────────────────────┐
+    │  1. Resolve Agent (registry)     │
+    │  2. Safety Guards (injection/PII)│
+    │  3. Build Prompt (builder)       │
+    │  4. Load Conversation History    │
+    │  5. Stream → Provider            │
+    │  6. Persist Messages (DB)        │
+    │  7. Log Telemetry                │
+    └──────────────────────────────────┘
+        │
+    GoogleProvider.stream()
+        │
+    SSE chunks → client
+```
+
+---
+
+*Last updated: Sprint 004 complete — July 2026*
