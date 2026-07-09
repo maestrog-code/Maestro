@@ -15,6 +15,10 @@ class DelegateTaskInput(BaseModel):
         ...,
         description="Detailed instructions and context for the sub-task. Be as explicit as possible."
     )
+    original_goal: str = Field(
+        ...,
+        description="The original overall goal or user request that prompted this delegation, to provide full context."
+    )
 
 
 class DelegateTaskOutput(BaseModel):
@@ -43,3 +47,27 @@ class DelegateTaskTool(BaseTool):
 
         logger.warning("delegate_task was executed without pipeline interception.")
         return "Sub-task delegated successfully."
+
+class UpdateTaskStatusInput(BaseModel):
+    step: str = Field(..., description="The name or description of the current planning step.")
+    status: str = Field(..., description="The status of the step (e.g., 'IN_PROGRESS', 'COMPLETED', 'PENDING', 'FAILED').")
+    notes: str = Field(..., description="Internal scratchpad notes, findings, or next actions.")
+
+class UpdateTaskStatusOutput(BaseModel):
+    result: str
+
+class UpdateTaskStatusTool(BaseTool):
+    """
+    Allows an agent to maintain a scratchpad or state tracking for multi-step tasks.
+    """
+    name: str = "update_task_status"
+    description: str = (
+        "Maintain a scratchpad of your current plan and progress. Use this to explicitly track "
+        "what steps you have completed, what you are currently doing, and what comes next."
+    )
+    input_schema = UpdateTaskStatusInput
+    output_schema = UpdateTaskStatusOutput
+
+    async def execute(self, step: str, status: str, notes: str, **kwargs) -> Any:
+        # Just returning it so the LLM has it in the context window
+        return f"Task State Updated.\nStep: {step}\nStatus: {status}\nNotes: {notes}"

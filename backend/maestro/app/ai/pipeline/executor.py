@@ -20,7 +20,7 @@ from app.modules.organizations.models import Organization
 # Import tools for dynamic instantiation
 from app.ai.tools.knowledge_tools import SearchKnowledgeBaseTool, GetDocumentTool, ListDocumentsTool
 from app.ai.tools.memory_tools import RememberFactTool, ForgetFactTool
-from app.ai.tools.orchestration_tools import DelegateTaskTool
+from app.ai.tools.orchestration_tools import DelegateTaskTool, UpdateTaskStatusTool
 from app.ai.embedding.google import GeminiEmbeddingProvider
 from app.modules.knowledge.services import KnowledgeService
 
@@ -53,6 +53,8 @@ class AIExecutionPipeline:
                 instances.append(ForgetFactTool())
             elif name == "delegate_task":
                 instances.append(DelegateTaskTool())
+            elif name == "update_task_status":
+                instances.append(UpdateTaskStatusTool())
         return instances
 
     async def _fetch_implicit_context(self, user_prompt: str) -> List[Dict[str, Any]]:
@@ -112,7 +114,8 @@ class AIExecutionPipeline:
         user_prompt: str,
         current_depth: int = 0,
         parent_message_id: Optional[UUID] = None,
-        target_agent: Optional[str] = None
+        target_agent: Optional[str] = None,
+        history_messages: Optional[List[AIMessage]] = None
     ) -> AsyncGenerator[str, None]:
         """
         Executes the AI conversation stream.
@@ -157,21 +160,24 @@ class AIExecutionPipeline:
         if current_depth > 0:
             system_content += "\n\nCRITICAL DIRECTIVE: You are executing a delegated sub-task for the CEO. You MUST return a concise, highly-structured executive summary of your findings. Do NOT return raw data rows unless explicitly requested."
 
-        # 5. Load Conversation History (last N messages)
-        history_models = self.conversation.messages[-10:] # last 10 messages
-        
         messages = [AIMessage(role=MessageRole.SYSTEM, content=system_content)]
-        for msg_model in history_models:
-            tool_calls = None
-            if msg_model.tool_calls:
-                tool_calls = [ToolCall(**tc) for tc in msg_model.tool_calls]
-            messages.append(AIMessage(
-                role=msg_model.role,
-                content=msg_model.content,
-                name=msg_model.name,
-                tool_calls=tool_calls,
-                tool_call_id=msg_model.tool_call_id
-            ))
+
+        if history_messages is None:
+            history_messages = []
+            history_models = self.conversation.messages[-10:] # last 10 messages
+            for msg_model in history_models:
+                tool_calls = None
+                if msg_model.tool_calls:
+                    tool_calls = [ToolCall(**tc) for tc in msg_model.tool_calls]
+                history_messages.append(AIMessage(
+                    role=msg_model.role,
+                    content=msg_model.content,
+                    name=msg_model.name,
+                    tool_calls=tool_calls,
+                    tool_call_id=msg_model.tool_call_id
+                ))
+        
+        messages.extend(history_messages)
             
         # Add the new user prompt
         messages.append(AIMessage(role=MessageRole.USER, content=user_prompt))
@@ -243,19 +249,28 @@ class AIExecutionPipeline:
                     else:
                         target = tc.arguments.get("target_agent", "CEO")
                         instructions = tc.arguments.get("instructions", "")
+                        original_goal = tc.arguments.get("original_goal", "")
+                        
+                        combined_prompt = f"Original Goal: {original_goal}\n\nTask Instructions:\n{instructions}" if original_goal else instructions
+
                         yield f"\n\n*[Delegating sub-task to {target}...]*\n"
 
                         sub_task_result = ""
-                        # Recursively call the pipeline
-                        async for sub_chunk in self.execute(
-                            user_prompt=instructions,
-                            current_depth=current_depth + 1,
-                            parent_message_id=user_msg_model.id,
-                            target_agent=target
-                        ):
-                            # We don't yield sub-chunks to the main stream to keep UI clean,
-                            # or we could. Let's just accumulate the sub_task_result.
-                            sub_task_result += sub_chunk
+                        
+                        try:
+                            # Recursively call the pipeline without passing raw history
+                            async for sub_chunk in self.execute(
+                                user_prompt=combined_prompt,
+                                current_depth=current_depth + 1,
+                                parent_message_id=user_msg_model.id,
+                                target_agent=target
+                            ):
+                                # We don't yield sub-chunks to the main stream to keep UI clean,
+                                # or we could. Let's just accumulate the sub_task_result.
+                                sub_task_result += sub_chunk
+                        except Exception as e:
+                            logger.error("Delegated sub-task failed: %s", e)
+                            sub_task_result = f"Error: The delegated task to {target} failed unexpectedly. Details: {e}"
 
                         # Middle-out Truncation
                         if len(sub_task_result) > 4000:

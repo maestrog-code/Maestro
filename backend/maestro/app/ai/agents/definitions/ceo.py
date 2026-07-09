@@ -12,7 +12,8 @@ ceo_agent = AgentDefinition(
         "list_documents",
         "remember_fact",
         "forget_fact",
-        "delegate_task"
+        "delegate_task",
+        "update_task_status"
     ],
     provider=ai_settings.DEFAULT_PROVIDER,
     temperature=ai_settings.DEFAULT_TEMPERATURE,

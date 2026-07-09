@@ -31,3 +31,7 @@ class AgentRegistry:
 
 
 registry = AgentRegistry()
+
+# Import definitions to register them
+from app.ai.agents.definitions import ceo, cfo
+
