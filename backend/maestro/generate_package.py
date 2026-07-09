@@ -3,6 +3,7 @@ import os
 files = [
     "app/ai/pipeline/executor.py",
     "app/ai/agents/registry.py",
+    "app/core/ai_settings.py",
     "app/ai/agents/definitions/ceo.py",
     "app/ai/prompts/templates/ceo_system.md",
     "app/ai/tools/orchestration_tools.py",

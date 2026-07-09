@@ -31,6 +31,6 @@ class AIConversationService:
     ) -> AsyncGenerator[str, None]:
         pipeline = AIExecutionPipeline(db, user, organization, conversation)
         async for chunk in pipeline.execute(prompt):
-            # SSE format
-            yield f"data: {chunk}\n\n"
-        yield "event: end\ndata: \n\n"
+            # SSE format leveraging Pydantic models
+            yield f"event: {chunk.event_type}\ndata: {chunk.model_dump_json()}\n\n"
+        yield "event: end\ndata: {}\n\n"

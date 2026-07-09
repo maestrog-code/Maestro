@@ -10,7 +10,10 @@ from app.ai.agents.registry import registry
 from app.ai.providers.factory import get_llm_provider
 from app.ai.prompts.builder import PromptBuilder, PromptContext
 from app.ai.pipeline.tool_executor import ToolExecutor
-from app.ai.schemas import AIMessage, MessageRole, ToolCall
+from app.ai.schemas import (
+    AIMessage, MessageRole, ToolCall,
+    StreamEvent, TokenEvent, OrchestrationEvent, TaskUpdateEvent, ToolCallEvent
+)
 from app.ai.telemetry.logger import telemetry
 from app.ai.safety.guards import AISafetyGuards
 from app.modules.ai_conversations.models import AIMessageModel, Conversation
@@ -112,9 +115,9 @@ class AIExecutionPipeline:
         user_prompt: str,
         current_depth: int = 0,
         parent_message_id: Optional[UUID] = None,
-        target_agent: Optional[str] = None,
+        target_agent: str = "CEO",
         history_messages: Optional[List[AIMessage]] = None
-    ) -> AsyncGenerator[str, None]:
+    ) -> AsyncGenerator[StreamEvent, None]:
         """
         Executes the AI conversation stream.
         """
@@ -213,7 +216,8 @@ class AIExecutionPipeline:
             ):
                 if isinstance(chunk, str):
                     full_response_text += chunk
-                    yield chunk
+                    if current_depth == 0:
+                        yield TokenEvent(text=chunk)
                 elif isinstance(chunk, ToolCall):
                     tool_calls_to_execute.append(chunk)
 
@@ -240,6 +244,13 @@ class AIExecutionPipeline:
 
             # Execute Tools
             for tc in tool_calls_to_execute:
+                if tc.name == "update_task_status":
+                    yield TaskUpdateEvent(
+                        step=tc.arguments.get("step", ""),
+                        status=tc.arguments.get("status", ""),
+                        notes=tc.arguments.get("notes")
+                    )
+                
                 if tc.name == "delegate_task":
                     # Hard Guardrail
                     if current_depth >= 3:
@@ -251,7 +262,10 @@ class AIExecutionPipeline:
                         
                         combined_prompt = f"Original Goal: {original_goal}\n\nTask Instructions:\n{instructions}" if original_goal else instructions
 
-                        yield f"\n\n*[Delegating sub-task to {target}...]*\n"
+                        yield OrchestrationEvent(
+                            target_agent=target,
+                            message=f"Delegating sub-task to {target}..."
+                        )
 
                         sub_task_result = ""
                         
@@ -264,9 +278,10 @@ class AIExecutionPipeline:
                                 target_agent=target,
                                 history_messages=[] # Force context isolation
                             ):
-                                # We don't yield sub-chunks to the main stream to keep UI clean,
-                                # or we could. Let's just accumulate the sub_task_result.
-                                sub_task_result += sub_chunk
+                                if isinstance(sub_chunk, TokenEvent):
+                                    sub_task_result += sub_chunk.text
+                                else:
+                                    yield sub_chunk
                         except Exception as e:
                             logger.error("Delegated sub-task failed: %s", e)
                             sub_task_result = f"Error: The delegated task to {target} failed unexpectedly. Details: {e}"
@@ -278,6 +293,9 @@ class AIExecutionPipeline:
 
                         tool_result = sub_task_result
                 else:
+                    if tc.name != "update_task_status":
+                        yield ToolCallEvent(tool_name=tc.name, status="started")
+                    
                     # Normal tool execution
                     tool_result = await tool_executor.execute(
                         db=self.db,
