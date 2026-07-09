@@ -11,13 +11,13 @@ class Conversation(TimestampedModel):
 
     organization_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id"), index=True)
     title: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    
+
     # Metadata required by CTO
     active_agent: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     provider: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     model: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     temperature: Mapped[Optional[float]] = mapped_column(nullable=True)
-    
+
     messages: Mapped[List["AIMessageModel"]] = relationship(
         back_populates="conversation", cascade="all, delete-orphan", order_by="AIMessageModel.created_at"
     )
@@ -26,12 +26,20 @@ class AIMessageModel(TimestampedModel):
     __tablename__ = "ai_messages"
 
     conversation_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("ai_conversations.id"), index=True)
-    
+
     role: Mapped[MessageRole] = mapped_column(SQLEnum(MessageRole, name="message_role_enum"))
     content: Mapped[str] = mapped_column(Text, default="")
-    
+
     name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     tool_calls: Mapped[Optional[list]] = mapped_column(JSON, nullable=True) # store list of ToolCall dicts as JSON
     tool_call_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
+    # Added in Sprint 007 for sub-agent orchestration
+    parent_message_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("ai_messages.id", ondelete="CASCADE"), nullable=True, index=True)
+
     conversation: Mapped["Conversation"] = relationship(back_populates="messages")
+
+    # Self-referential relationships for the adjacency list
+    parent: Mapped[Optional["AIMessageModel"]] = relationship(
+        "AIMessageModel", remote_side="AIMessageModel.id", backref="children"
+    )

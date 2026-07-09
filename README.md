@@ -35,7 +35,7 @@ organization's own data.
 | Migrations | Alembic |
 | CI | GitHub Actions (Python 3.12) |
 | Mobile | Flutter *(Phase 4)* |
-| Web | React + Next.js *(Phase 5)* |
+| Web | React/Vite scaffold *(Phase 5 product work is out of scope for v0.1)* |
 
 ---
 
@@ -50,7 +50,7 @@ Maestro/
 │   │   └── modules/      ← organizations, users, ai_conversations
 │   └── alembic/          ← Database migrations
 ├── mobile/               ← Flutter app (Phase 4)
-├── web/                  ← Next.js web app (Phase 5)
+├── web/                  ← React/Vite scaffold (Phase 5 product work)
 ├── docs/                 ← Architecture, roadmap, AI context documents
 └── prompts/              ← Sprint CTO review packages
 ```
@@ -88,3 +88,7 @@ alembic upgrade head
 ---
 
 *Sprint 006 complete — tag `sprint-006` — July 2026*
+
+> **v0.1.0 stabilisation note:** the v0.1 milestone is backend/API-first. The
+> `web/` folder is currently a scaffold and is not a release blocker unless the
+> milestone scope is explicitly expanded to include the web product.

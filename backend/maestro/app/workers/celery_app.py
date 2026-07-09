@@ -9,7 +9,17 @@ celery_app = Celery(
 
 celery_app.conf.task_routes = {
     "app.workers.tasks.*": "main-queue",
+    "app.workers.memory_tasks.*": "memory-queue",
     "knowledge.*": "knowledge-queue",
+}
+
+from celery.schedules import crontab
+
+celery_app.conf.beat_schedule = {
+    "decay-memories-daily": {
+        "task": "app.workers.memory_tasks.decay_memories_task",
+        "schedule": crontab(hour=0, minute=0),  # Run daily at midnight
+    },
 }
 
 

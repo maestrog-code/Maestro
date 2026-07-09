@@ -8,8 +8,6 @@ Create Date: 2026-07-07 10:00:00.000000
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
-from app.core.ai_settings import ai_settings
-
 # revision identifiers, used by Alembic.
 revision = '004_memory_system'
 down_revision = '003_knowledge_engine'
@@ -18,13 +16,13 @@ depends_on = None
 
 def upgrade() -> None:
     # 1. Create Enums
-    memory_type_enum = postgresql.ENUM('FACT', 'PREFERENCE', 'GOAL', 'DECISION', 'PROFILE', 'WARNING', 'TASK', 'RELATIONSHIP', 'CONSTRAINT', name='memory_type_enum', create_type=False)
+    memory_type_enum = postgresql.ENUM('fact', 'preference', 'goal', 'decision', 'profile', 'warning', 'task', 'relationship', 'constraint', 'project', name='memory_type_enum', create_type=False)
     memory_type_enum.create(op.get_bind(), checkfirst=True)
 
-    memory_status_enum = postgresql.ENUM('ACTIVE', 'STALE', 'ARCHIVED', 'CONFLICTED', name='memory_status_enum', create_type=False)
+    memory_status_enum = postgresql.ENUM('active', 'stale', 'archived', 'conflicted', 'superseded', name='memory_status_enum', create_type=False)
     memory_status_enum.create(op.get_bind(), checkfirst=True)
 
-    memory_source_enum = postgresql.ENUM('CONVERSATION', 'MANUAL', 'TOOL', 'IMPORT', 'SYSTEM', name='memory_source_enum', create_type=False)
+    memory_source_enum = postgresql.ENUM('conversation', 'manual', 'tool', 'import', 'system', name='memory_source_enum', create_type=False)
     memory_source_enum.create(op.get_bind(), checkfirst=True)
 
     # 2. agent_memories
@@ -34,9 +32,9 @@ def upgrade() -> None:
         sa.Column('user_id', postgresql.UUID(as_uuid=True), nullable=True),
         sa.Column('agent_id', sa.String(), nullable=True),
         sa.Column('content', sa.Text(), nullable=False),
-        sa.Column('memory_type', memory_type_enum, nullable=False, server_default='FACT'),
-        sa.Column('status', memory_status_enum, nullable=False, server_default='ACTIVE'),
-        sa.Column('source', memory_source_enum, nullable=False, server_default='SYSTEM'),
+        sa.Column('memory_type', memory_type_enum, nullable=False, server_default='fact'),
+        sa.Column('status', memory_status_enum, nullable=False, server_default='active'),
+        sa.Column('source', memory_source_enum, nullable=False, server_default='system'),
         sa.Column('importance_score', sa.Float(), nullable=False, server_default='0.5'),
         sa.Column('confidence_score', sa.Float(), nullable=False, server_default='0.8'),
         sa.Column('last_accessed', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
@@ -75,8 +73,16 @@ def upgrade() -> None:
     )
     op.create_index(op.f('ix_memory_embeddings_memory_id'), 'memory_embeddings', ['memory_id'], unique=False)
     
-    # Add dynamic vector column
-    dim = ai_settings.EMBEDDING_DIMENSIONS
+    # INTENTIONAL: The embedding dimension is frozen at 768 for this migration.
+    # Migrations must be immutable — they cannot depend on runtime configuration.
+    # If the embedding model changes (e.g. to 1024-dim), create a NEW migration that:
+    #   1. Adds a new `vector_v2 vector(1024)` column.
+    #   2. Backfills it.
+    #   3. Renames / drops the old column.
+    # Also update AI_EMBEDDING_DIMENSIONS in ai_settings.py to match.
+    # A startup validation in app/core/startup.py should assert:
+    #   SELECT vector_dims(vector) FROM memory_embeddings LIMIT 1 == ai_settings.EMBEDDING_DIMENSIONS
+    dim = 768
     op.execute(f"ALTER TABLE memory_embeddings ADD COLUMN vector vector({dim});")
     op.execute(f"CREATE INDEX ix_memory_embeddings_vector ON memory_embeddings USING ivfflat (vector vector_cosine_ops) WITH (lists = 100);")
 

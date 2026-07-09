@@ -114,6 +114,9 @@
 - [ ] Development setup verified on a fresh machine
 - [ ] `v0.1.0` tag created and pushed after all checks pass
 
+**Scope note:** v0.1.0 stabilisation is backend/API-first. The React/Vite
+`web/` scaffold is not a release blocker for this milestone.
+
 ---
 
 ## Phase 2 — AI Knowledge & Reasoning
@@ -167,15 +170,18 @@
   - Weighted ranking formula (`Similarity × Importance × Confidence × Recency × Access Frequency`)
 - [x] **Prompt Injection Pipeline Update**
   - Inject memory context strictly *before* knowledge base context
-- [x] **Memory Management API**
-  - `GET`, `POST`, and `PATCH` (soft archive) endpoints
-- [x] DB migration `004_memory_system.py` using dynamic `VECTOR(n)`
-- [x] End-to-end tests
+- [x] **Sprint 006: Memory System** (Completed)
+  - `AgentMemory` models with vectors
+  - Implicit memory extraction via Celery
+  - Hybrid Knowledge vs Memory abstractions
 
----
+- [x] **Sprint 006.5: Memory Stabilization** (Completed)
+  - `ConflictResolutionService` for LLM-based deduplication (`MERGE`, `SUPERSEDE`, `NEW`)
+  - Exponential decay of memory importance (`decay_memories_task`)
+  - Centralized `MemoryPolicy` for lifecycle control
 
-### Sprint 007 — Agent Orchestration Engine
-**Goal:** Agents that can delegate subtasks and plan across multiple steps
+- [ ] **Sprint 007: Agent Orchestration Engine**
+  - Next task.
 
 - [ ] Planning agent (task decomposition)
 - [ ] Agent-to-agent routing
@@ -245,6 +251,12 @@
 | **MVP** | Mobile app + full AI executive suite | ⬜ Planned |
 | **v1.0** | Payments + automation + paying customers | ⬜ Planned |
 | **v2.0** | 100+ businesses, marketplace, public API | ⬜ Planned |
+
+---
+
+## Technical Debt Backlog
+
+- **Database**: Adopt the native `pgvector.sqlalchemy` types during the next major database refactoring sprint. (Currently using a manual workaround `vector = Column(String)`).
 
 ---
 

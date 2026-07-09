@@ -12,12 +12,14 @@ from app.modules.users.models import User
 from app.modules.organizations.services import OrganizationPermissionService
 from app.modules.knowledge.services import KnowledgeService
 from app.modules.knowledge.schemas import (
+    DocumentCreate,
     DocumentUploadResponse,
     KnowledgeSearchRequest,
     KnowledgeSearchResponse,
     DocumentResponse,
     DocumentListResponse
 )
+from app.modules.knowledge.models import DocType, Visibility
 
 
 router = APIRouter(prefix="/organizations/{organization_id}/knowledge", tags=["Knowledge"])
@@ -28,8 +30,8 @@ async def upload_document(
     organization_id: UUID,
     file: UploadFile = File(...),
     title: str = Form(...),
-    doc_type: str = Form("file"),
-    visibility: str = Form("org"),
+    doc_type: DocType = Form(DocType.file),
+    visibility: Visibility = Form(Visibility.org),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -40,18 +42,15 @@ async def upload_document(
     await OrganizationPermissionService.require_member(db, organization_id, current_user.id)
     service = KnowledgeService(db)
 
-    file_bytes = await file.read()
-    doc_id = await service.create_from_file(
+    document = await service.upload_file(
         org_id=organization_id,
         user=current_user,
-        file_name=file.filename,
-        file_bytes=file_bytes,
-        mime_type=file.content_type,
         title=title,
+        file=file,
         doc_type=doc_type,
-        visibility=visibility
+        visibility=visibility,
     )
-    return DocumentUploadResponse(document_id=doc_id, status="pending")
+    return DocumentUploadResponse(document_id=document.id, status=document.status)
 
 
 @router.post("/documents/note", response_model=DocumentUploadResponse, status_code=status.HTTP_202_ACCEPTED)
@@ -59,8 +58,8 @@ async def create_inline_note(
     organization_id: UUID,
     title: str = Form(...),
     content: str = Form(...),
-    doc_type: str = Form("note"),
-    visibility: str = Form("org"),
+    doc_type: DocType = Form(DocType.note),
+    visibility: Visibility = Form(Visibility.org),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -70,15 +69,17 @@ async def create_inline_note(
     await OrganizationPermissionService.require_member(db, organization_id, current_user.id)
     service = KnowledgeService(db)
 
-    doc_id = await service.create_inline(
+    document = await service.create_note(
         org_id=organization_id,
         user=current_user,
-        title=title,
-        content=content,
-        doc_type=doc_type,
-        visibility=visibility
+        data=DocumentCreate(
+            title=title,
+            content=content,
+            doc_type=doc_type,
+            visibility=visibility,
+        ),
     )
-    return DocumentUploadResponse(document_id=doc_id, status="pending")
+    return DocumentUploadResponse(document_id=document.id, status=document.status)
 
 
 @router.get("/documents", response_model=DocumentListResponse)
@@ -110,16 +111,7 @@ async def get_document(
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
         
-    return DocumentResponse(
-        id=doc.id,
-        title=doc.title,
-        doc_type=doc.doc_type.value,
-        status=doc.status.value,
-        visibility=doc.visibility.value,
-        created_at=doc.created_at,
-        file_name=doc.file_name,
-        content=doc.content
-    )
+    return doc
 
 
 @router.delete("/documents/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -132,7 +124,7 @@ async def delete_document(
     """Delete a document and its embeddings."""
     await OrganizationPermissionService.require_member(db, organization_id, current_user.id)
     service = KnowledgeService(db)
-    success = await service.delete_document(organization_id, document_id)
+    success = await service.delete_document(organization_id, document_id, current_user)
     if not success:
         raise HTTPException(status_code=404, detail="Document not found")
 
@@ -152,6 +144,6 @@ async def search_knowledge(
         org_id=organization_id,
         user=current_user,
         query=request.query,
-        top_k=request.limit,
+        top_k=request.top_k,
         filters=request.filters
     )

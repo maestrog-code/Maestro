@@ -33,6 +33,20 @@ class MemoryRepository:
         result = await self.db.execute(stmt)
         return result.scalar_one_or_none()
 
+    async def get_for_update(self, organization_id: UUID, memory_id: UUID) -> Optional[AgentMemory]:
+        """Fetches a memory and locks the row (SELECT ... FOR UPDATE) to prevent concurrent modifications."""
+        stmt = (
+            select(AgentMemory)
+            .where(
+                AgentMemory.id == memory_id,
+                AgentMemory.organization_id == organization_id,
+                AgentMemory.is_deleted == False
+            )
+            .with_for_update()
+        )
+        result = await self.db.execute(stmt)
+        return result.scalar_one_or_none()
+
     async def list_by_organization(
         self,
         organization_id: UUID,
@@ -43,11 +57,11 @@ class MemoryRepository:
             AgentMemory.organization_id == organization_id,
             AgentMemory.is_deleted == False
         )
-        
+
         count_stmt = select(func.count()).select_from(base_stmt.subquery())
         total = await self.db.execute(count_stmt)
         total = total.scalar() or 0
-        
+
         stmt = (
             base_stmt
             .order_by(AgentMemory.created_at.desc())
@@ -63,14 +77,32 @@ class MemoryRepository:
         return memory
 
     async def update(self, memory: AgentMemory) -> AgentMemory:
-        # Changes are flushed implicitly or explicitly before commit
+        await self.db.flush()
         return memory
 
     async def record_access(self, memory: AgentMemory, context: str) -> None:
-        """Increments access count and logs the access."""
+        """Increments access count and logs the access atomically."""
+        from datetime import datetime, timezone
+        from sqlalchemy import update
+
+        now = datetime.now(timezone.utc)
+
+        # Atomic increment at the database layer to avoid race conditions
+        stmt = (
+            update(AgentMemory)
+            .where(AgentMemory.id == memory.id)
+            .values(
+                access_count=AgentMemory.access_count + 1,
+                last_accessed=now
+            )
+            .execution_options(synchronize_session=False)
+        )
+        await self.db.execute(stmt)
+
+        # Update the memory object in memory so the caller sees the changes
         memory.access_count += 1
-        memory.last_accessed = func.now()
-        
+        memory.last_accessed = now
+
         log = MemoryAccessLog(
             memory_id=memory.id,
             organization_id=memory.organization_id,
@@ -109,7 +141,7 @@ class MemoryEmbeddingRepository:
         """
         # Convert vector to string representation for pgvector
         vector_str = f"[{','.join(map(str, query_vector))}]"
-        
+
         # Calculate cosine distance (<=>). Cosine similarity = 1 - cosine_distance.
         distance = MemoryEmbedding.vector.op("<=>")(vector_str)
         similarity = (1 - distance).label("similarity")

@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.modules.knowledge.models import DocStatus, DocType, Visibility
 
@@ -27,10 +27,17 @@ class SearchRequest(BaseModel):
     """Semantic search request body."""
     query: str = Field(..., min_length=1, max_length=2000)
     top_k: int = Field(default=5, ge=1, le=20)
+    limit: Optional[int] = Field(default=None, ge=1, le=20)
     filters: Optional[dict] = Field(
         default=None,
         description="Optional metadata filters: doc_type, visibility"
     )
+
+    @model_validator(mode="after")
+    def normalize_limit(self) -> "SearchRequest":
+        if self.limit is not None:
+            self.top_k = self.limit
+        return self
 
 
 # ---------------------------------------------------------------------------
@@ -87,6 +94,17 @@ class SearchResponse(BaseModel):
     query: str
     results: List[ChunkResult]
     total_results: int
+
+
+class DocumentUploadResponse(BaseModel):
+    """Acknowledgement for asynchronously queued document ingestion."""
+    document_id: UUID
+    status: DocStatus
+
+
+# Backwards-compatible names used by the existing router/tests.
+KnowledgeSearchRequest = SearchRequest
+KnowledgeSearchResponse = SearchResponse
 
 
 class ReindexResponse(BaseModel):

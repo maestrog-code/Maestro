@@ -11,6 +11,7 @@ from app.modules.users.models import User
 from app.modules.organizations.services import OrganizationPermissionService
 from app.modules.memory.services import MemoryService
 from app.modules.memory.schemas import MemoryCreate, MemoryUpdate, MemoryResponse, MemoryListResponse
+from app.ai.embedding.google import GeminiEmbeddingProvider
 
 router = APIRouter(prefix="/organizations/{organization_id}/memories", tags=["Memory"])
 
@@ -24,7 +25,7 @@ async def create_memory(
 ):
     """Manually add a memory for the organization."""
     await OrganizationPermissionService.require_member(db, organization_id, current_user.id)
-    service = MemoryService(db)
+    service = MemoryService(db, embedding_provider=GeminiEmbeddingProvider())
     
     new_memory = await service.add_memory(
         organization_id=organization_id,

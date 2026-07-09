@@ -7,6 +7,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 from app.ai.tools.base import BaseTool
+from app.ai.embedding.google import GeminiEmbeddingProvider
 from app.modules.memory.services import MemoryService
 from app.modules.memory.models import MemoryType, MemorySource
 
@@ -31,7 +32,7 @@ class RememberFactTool(BaseTool):
     output_schema = RememberFactOutput
 
     async def execute(self, db, organization_id: UUID, user_id: UUID, content: str, memory_type: MemoryType, importance: float, confidence: float, **kwargs) -> Any:
-        service = MemoryService(db)
+        service = MemoryService(db, embedding_provider=GeminiEmbeddingProvider())
         
         try:
             mem = await service.add_memory(

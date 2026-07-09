@@ -15,6 +15,7 @@ class AIMessageResponse(BaseModel):
     name: Optional[str] = None
     tool_calls: Optional[List[ToolCall]] = None
     tool_call_id: Optional[str] = None
+    parent_message_id: Optional[UUID] = None
     created_at: datetime
 
 

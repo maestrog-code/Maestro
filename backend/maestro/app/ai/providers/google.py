@@ -149,7 +149,7 @@ class GoogleProvider(BaseLLMProvider):
         temperature: float = 0.2,
         max_tokens: Optional[int] = None,
         **kwargs
-    ) -> AsyncGenerator[str, None]:
+    ) -> AsyncGenerator[Any, None]:
         system_instruction, contents = self._convert_messages(messages)
         google_tools = self._convert_tools(tools)
 
@@ -161,7 +161,6 @@ class GoogleProvider(BaseLLMProvider):
             **kwargs
         )
 
-        # For Sprint 004, we assume streaming is only for text responses
         async for chunk in await self.client.aio.models.generate_content_stream(
             model=self.model_name,
             contents=contents,
@@ -169,6 +168,12 @@ class GoogleProvider(BaseLLMProvider):
         ):
             if chunk.text:
                 yield chunk.text
+            elif chunk.function_call:
+                yield ToolCall(
+                    id=chunk.function_call.name,
+                    name=chunk.function_call.name,
+                    arguments=dict(chunk.function_call.args) if chunk.function_call.args else {}
+                )
 
     async def embeddings(self, texts: List[str]) -> List[List[float]]:
         """

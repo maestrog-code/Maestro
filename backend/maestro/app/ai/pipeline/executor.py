@@ -1,4 +1,5 @@
 import json
+import logging
 import time
 from uuid import UUID
 from typing import AsyncGenerator, Dict, Any, List, Optional
@@ -6,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.ai_settings import ai_settings
 from app.ai.agents.registry import registry
-from app.ai.providers.google import GoogleProvider
+from app.ai.providers.factory import get_llm_provider
 from app.ai.prompts.builder import PromptBuilder, PromptContext
 from app.ai.pipeline.tool_executor import ToolExecutor
 from app.ai.schemas import AIMessage, MessageRole, ToolCall
@@ -18,7 +19,12 @@ from app.modules.organizations.models import Organization
 
 # Import tools for dynamic instantiation
 from app.ai.tools.knowledge_tools import SearchKnowledgeBaseTool, GetDocumentTool, ListDocumentsTool
+from app.ai.tools.memory_tools import RememberFactTool, ForgetFactTool
+from app.ai.tools.orchestration_tools import DelegateTaskTool
+from app.ai.embedding.google import GeminiEmbeddingProvider
 from app.modules.knowledge.services import KnowledgeService
+
+logger = logging.getLogger(__name__)
 
 
 class AIExecutionPipeline:
@@ -27,8 +33,7 @@ class AIExecutionPipeline:
         self.user = user
         self.organization = organization
         self.conversation = conversation
-        # Currently only supporting GoogleProvider for chat
-        self.provider = GoogleProvider()
+        self.provider = None
 
     async def _resolve_tools(self, tool_names: List[str]) -> List[Any]:
         """Instantiate tools based on names, injecting required context."""
@@ -42,6 +47,12 @@ class AIExecutionPipeline:
                 instances.append(GetDocumentTool(knowledge_service, self.organization.id))
             elif name == "list_documents":
                 instances.append(ListDocumentsTool(knowledge_service, self.organization.id))
+            elif name == "remember_fact":
+                instances.append(RememberFactTool())
+            elif name == "forget_fact":
+                instances.append(ForgetFactTool())
+            elif name == "delegate_task":
+                instances.append(DelegateTaskTool())
         return instances
 
     async def _fetch_implicit_context(self, user_prompt: str) -> List[Dict[str, Any]]:
@@ -77,7 +88,7 @@ class AIExecutionPipeline:
         """Fetch highly relevant long-term memory for implicit injection."""
         try:
             from app.modules.memory.services import MemoryService
-            memory_service = MemoryService(self.db)
+            memory_service = MemoryService(self.db, embedding_provider=GeminiEmbeddingProvider())
             search_resp = await memory_service.search(
                 organization_id=self.organization.id,
                 query=user_prompt,
@@ -93,21 +104,32 @@ class AIExecutionPipeline:
                 })
             return memories
         except Exception as e:
-            import logging
-            logging.getLogger(__name__).warning(f"Implicit memory fetch failed: {e}")
+            logger.warning("Implicit memory fetch failed: %s", e)
             return []
 
-    async def execute(self, user_prompt: str) -> AsyncGenerator[str, None]:
+    async def execute(
+        self,
+        user_prompt: str,
+        current_depth: int = 0,
+        parent_message_id: Optional[UUID] = None,
+        target_agent: Optional[str] = None
+    ) -> AsyncGenerator[str, None]:
         """
         Executes the AI conversation stream.
         """
         start_time = time.time()
         
         # 1. Select Agent
-        agent_id = self.conversation.active_agent or "CEO"
+        agent_id = target_agent or self.conversation.active_agent or "CEO"
         agent = registry.get_agent(agent_id)
         if not agent:
             yield f"Error: Agent '{agent_id}' not found in registry."
+            return
+
+        try:
+            self.provider = get_llm_provider(agent.provider)
+        except Exception as e:
+            yield f"Error: Could not initialize AI provider '{agent.provider}': {e}"
             return
 
         # 2. Safety Guards
@@ -130,6 +152,10 @@ class AIExecutionPipeline:
             memories=implicit_memories
         )
         system_content = PromptBuilder.render(agent.system_prompt_template, context)
+
+        # Inject Summarization at Source if this is a delegated task
+        if current_depth > 0:
+            system_content += "\n\nCRITICAL DIRECTIVE: You are executing a delegated sub-task for the CEO. You MUST return a concise, highly-structured executive summary of your findings. Do NOT return raw data rows unless explicitly requested."
 
         # 5. Load Conversation History (last N messages)
         history_models = self.conversation.messages[-10:] # last 10 messages
@@ -154,7 +180,8 @@ class AIExecutionPipeline:
         user_msg_model = AIMessageModel(
             conversation_id=self.conversation.id,
             role=MessageRole.USER,
-            content=user_prompt
+            content=user_prompt,
+            parent_message_id=parent_message_id
         )
         self.db.add(user_msg_model)
         await self.db.commit()
@@ -169,26 +196,104 @@ class AIExecutionPipeline:
 
         while iteration_count < max_iterations:
             iteration_count += 1
-            
+
             # 7. Stream from Provider
             full_response_text = ""
+            tool_calls_to_execute = []
+
             async for chunk in self.provider.stream(
                 messages=messages,
                 tools=tool_schemas if tool_schemas else None,
                 temperature=agent.temperature,
                 max_tokens=agent.max_tokens
             ):
-                full_response_text += chunk
-                yield chunk
+                if isinstance(chunk, str):
+                    full_response_text += chunk
+                    yield chunk
+                elif isinstance(chunk, ToolCall):
+                    tool_calls_to_execute.append(chunk)
 
             # We exit after the first stream response since full tool calling loop is disabled for Sprint 004
+            # UNLESS there are tool calls, in which case we execute them and loop (Sprint 007 upgrade)
             assistant_msg_model = AIMessageModel(
                 conversation_id=self.conversation.id,
                 role=MessageRole.ASSISTANT,
-                content=full_response_text
+                content=full_response_text,
+                parent_message_id=parent_message_id,
+                tool_calls=[tc.model_dump() for tc in tool_calls_to_execute] if tool_calls_to_execute else None
             )
             self.db.add(assistant_msg_model)
             await self.db.commit()
+
+            messages.append(AIMessage(
+                role=MessageRole.ASSISTANT,
+                content=full_response_text,
+                tool_calls=tool_calls_to_execute if tool_calls_to_execute else None
+            ))
+
+            if not tool_calls_to_execute:
+                break
+
+            # Execute Tools
+            for tc in tool_calls_to_execute:
+                if tc.name == "delegate_task":
+                    # Hard Guardrail
+                    if current_depth >= 3:
+                        tool_result = "Error: Maximum delegation depth (3) exceeded."
+                    else:
+                        target = tc.arguments.get("target_agent", "CEO")
+                        instructions = tc.arguments.get("instructions", "")
+                        yield f"\n\n*[Delegating sub-task to {target}...]*\n"
+
+                        sub_task_result = ""
+                        # Recursively call the pipeline
+                        async for sub_chunk in self.execute(
+                            user_prompt=instructions,
+                            current_depth=current_depth + 1,
+                            parent_message_id=user_msg_model.id,
+                            target_agent=target
+                        ):
+                            # We don't yield sub-chunks to the main stream to keep UI clean,
+                            # or we could. Let's just accumulate the sub_task_result.
+                            sub_task_result += sub_chunk
+
+                        # Middle-out Truncation
+                        if len(sub_task_result) > 4000:
+                            half = 1950
+                            sub_task_result = sub_task_result[:half] + "\n\n...[TRUNCATED for brevity]...\n\n" + sub_task_result[-half:]
+
+                        tool_result = sub_task_result
+                else:
+                    # Normal tool execution
+                    tool_result = await tool_executor.execute(
+                        db=self.db,
+                        tool_name=tc.name,
+                        tool_args=tc.arguments,
+                        user_id=self.user.id,
+                        organization_id=self.organization.id,
+                        agent_id=agent.id,
+                    )
+
+                if not isinstance(tool_result, str):
+                    tool_result = json.dumps(tool_result, default=str)
+
+                tool_msg_model = AIMessageModel(
+                    conversation_id=self.conversation.id,
+                    role=MessageRole.TOOL,
+                    content=tool_result,
+                    tool_call_id=tc.id,
+                    name=tc.name,
+                    parent_message_id=parent_message_id
+                )
+                self.db.add(tool_msg_model)
+                await self.db.commit()
+
+                messages.append(AIMessage(
+                    role=MessageRole.TOOL,
+                    content=tool_result,
+                    tool_call_id=tc.id,
+                    name=tc.name
+                ))
 
             # 8. Telemetry
             latency = (time.time() - start_time) * 1000
@@ -203,7 +308,3 @@ class AIExecutionPipeline:
                 input_tokens=0,
                 output_tokens=0,
             )
-            
-            break
-
-

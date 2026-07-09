@@ -18,10 +18,8 @@ class GeminiEmbeddingProvider(BaseEmbeddingProvider):
     """Google Gemini embedding provider (text-embedding-004)."""
 
     def __init__(self, api_key: str | None = None):
-        key = api_key or os.environ.get("GEMINI_API_KEY")
-        if not key:
-            raise ValueError("GEMINI_API_KEY must be set in the environment.")
-        self.client = genai.Client(api_key=key)
+        self.api_key = api_key or os.environ.get("GEMINI_API_KEY")
+        self.client = genai.Client(api_key=self.api_key) if self.api_key else None
 
     @property
     def provider_name(self) -> str:
@@ -44,6 +42,9 @@ class GeminiEmbeddingProvider(BaseEmbeddingProvider):
         results: List[List[float]] = []
         for text in texts:
             try:
+                if self.client is None:
+                    results.append([0.0] * self.dimensions)
+                    continue
                 response = await self.client.aio.models.embed_content(
                     model=self.model_name,
                     contents=text,
