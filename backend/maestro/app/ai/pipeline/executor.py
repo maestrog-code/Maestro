@@ -216,8 +216,7 @@ class AIExecutionPipeline:
             ):
                 if isinstance(chunk, str):
                     full_response_text += chunk
-                    if current_depth == 0:
-                        yield TokenEvent(text=chunk)
+                    yield TokenEvent(text=chunk)
                 elif isinstance(chunk, ToolCall):
                     tool_calls_to_execute.append(chunk)
 
@@ -297,14 +296,22 @@ class AIExecutionPipeline:
                         yield ToolCallEvent(tool_name=tc.name, status="started")
                     
                     # Normal tool execution
-                    tool_result = await tool_executor.execute(
-                        db=self.db,
-                        tool_name=tc.name,
-                        tool_args=tc.arguments,
-                        user_id=self.user.id,
-                        organization_id=self.organization.id,
-                        agent_id=agent.id,
-                    )
+                    try:
+                        tool_result = await tool_executor.execute(
+                            db=self.db,
+                            tool_name=tc.name,
+                            tool_args=tc.arguments,
+                            user_id=self.user.id,
+                            organization_id=self.organization.id,
+                            agent_id=agent.id,
+                        )
+                        if tc.name != "update_task_status":
+                            yield ToolCallEvent(tool_name=tc.name, status="completed")
+                    except Exception as e:
+                        logger.error("Tool execution failed: %s", e)
+                        tool_result = f"Error executing tool {tc.name}: {e}"
+                        if tc.name != "update_task_status":
+                            yield ToolCallEvent(tool_name=tc.name, status="failed")
 
                 if not isinstance(tool_result, str):
                     tool_result = json.dumps(tool_result, default=str)

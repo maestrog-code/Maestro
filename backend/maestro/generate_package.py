@@ -2,6 +2,8 @@ import os
 
 files = [
     "app/ai/pipeline/executor.py",
+    "app/ai/schemas.py",
+    "app/modules/ai_conversations/services.py",
     "app/ai/agents/registry.py",
     "app/core/ai_settings.py",
     "app/ai/agents/definitions/ceo.py",
@@ -11,14 +13,14 @@ files = [
     "alembic/versions/007_add_parent_message_id.py"
 ]
 
-out_path = "/Users/cuthbertrwebilumi/Desktop/Maestro/prompts/Sprint_007_CTO_Review_Package.md"
+out_path = "/Users/cuthbertrwebilumi/Desktop/Maestro/prompts/Sprint_008_CTO_Review_Package.md"
 
 with open(out_path, "w") as out:
-    out.write("# MAESTRO — Sprint 007 CTO Review Package\n\n")
+    out.write("# MAESTRO — Sprint 008 CTO Review Package\n\n")
     out.write("Paste this entire document into ChatGPT for the code review.\n\n")
     out.write("---\n\n")
     out.write("## Context\n\n")
-    out.write("Sprint 007 is on branch `feature/agent-orchestration-engine`.\n")
+    out.write("Sprint 008 is on branch `feature/agent-orchestration-engine`.\n")
     out.write("This document contains every implementation file in full, exactly as committed.\n\n")
     out.write("---\n\n")
 
