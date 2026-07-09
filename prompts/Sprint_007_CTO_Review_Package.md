@@ -1,3 +1,19 @@
+# MAESTRO — Sprint 007 CTO Review Package
+
+Paste this entire document into ChatGPT for the code review.
+
+---
+
+## Context
+
+Sprint 007 is on branch `feature/agent-orchestration-engine`.
+This document contains every implementation file in full, exactly as committed.
+
+---
+
+## `app/ai/pipeline/executor.py`
+
+```py
 import json
 import logging
 import time
@@ -33,6 +49,7 @@ class AIExecutionPipeline:
         self.user = user
         self.organization = organization
         self.conversation = conversation
+        self.provider = None
 
     async def _resolve_tools(self, tool_names: List[str]) -> List[Any]:
         """Instantiate tools based on names, injecting required context."""
@@ -81,7 +98,8 @@ class AIExecutionPipeline:
             return documents
         except Exception as e:
             # Don't fail the chat if RAG errors
-            logger.exception("Implicit RAG failed: %s", e)
+            import logging
+            logging.getLogger(__name__).warning(f"Implicit RAG failed: {e}")
             return []
 
     async def _fetch_implicit_memory(self, user_prompt: str) -> List[Dict[str, Any]]:
@@ -128,7 +146,7 @@ class AIExecutionPipeline:
             return
 
         try:
-            provider = get_llm_provider(agent.provider)
+            self.provider = get_llm_provider(agent.provider)
         except Exception as e:
             yield f"Error: Could not initialize AI provider '{agent.provider}': {e}"
             return
@@ -205,7 +223,7 @@ class AIExecutionPipeline:
             full_response_text = ""
             tool_calls_to_execute = []
 
-            async for chunk in provider.stream(
+            async for chunk in self.provider.stream(
                 messages=messages,
                 tools=tool_schemas if tool_schemas else None,
                 temperature=agent.temperature,
@@ -261,8 +279,7 @@ class AIExecutionPipeline:
                                 user_prompt=combined_prompt,
                                 current_depth=current_depth + 1,
                                 parent_message_id=user_msg_model.id,
-                                target_agent=target,
-                                history_messages=[] # Force context isolation
+                                target_agent=target
                             ):
                                 # We don't yield sub-chunks to the main stream to keep UI clean,
                                 # or we could. Let's just accumulate the sub_task_result.
@@ -272,9 +289,9 @@ class AIExecutionPipeline:
                             sub_task_result = f"Error: The delegated task to {target} failed unexpectedly. Details: {e}"
 
                         # Middle-out Truncation
-                        if len(sub_task_result) > ai_settings.DELEGATION_MAX_CHARS:
-                            half = ai_settings.DELEGATION_MAX_CHARS // 2 - 50
-                            sub_task_result = sub_task_result[:half] + "\n\n...[TRUNCATED]...\n\n" + sub_task_result[-half:]
+                        if len(sub_task_result) > 4000:
+                            half = 1950
+                            sub_task_result = sub_task_result[:half] + "\n\n...[TRUNCATED for brevity]...\n\n" + sub_task_result[-half:]
 
                         tool_result = sub_task_result
                 else:
@@ -316,9 +333,290 @@ class AIExecutionPipeline:
                 organization_id=self.organization.id,
                 conversation_id=self.conversation.id,
                 agent=agent.id,
-                provider=provider.__class__.__name__,
+                provider=self.provider.__class__.__name__,
                 model=agent.provider, # assuming provider string acts as model
                 latency_ms=latency,
                 input_tokens=0,
                 output_tokens=0,
             )
+```
+
+---
+
+## `app/ai/agents/registry.py`
+
+```py
+from typing import Dict, List, Optional
+from pydantic import BaseModel
+
+from app.core.ai_settings import ai_settings
+
+
+class AgentDefinition(BaseModel):
+    id: str
+    name: str
+    version: str
+    system_prompt_template: str
+    tools: List[str]  # List of tool names
+    provider: str
+    temperature: float
+    max_tokens: int
+    enabled: bool
+
+
+class AgentRegistry:
+    def __init__(self):
+        self._agents: Dict[str, AgentDefinition] = {}
+
+    def register(self, agent: AgentDefinition) -> None:
+        self._agents[agent.id] = agent
+
+    def get_agent(self, agent_id: str) -> Optional[AgentDefinition]:
+        return self._agents.get(agent_id)
+
+    def list_agents(self) -> List[AgentDefinition]:
+        return [agent for agent in self._agents.values() if agent.enabled]
+
+
+registry = AgentRegistry()
+
+# Import definitions to register them
+from app.ai.agents.definitions import ceo, cfo
+```
+
+---
+
+## `app/ai/agents/definitions/ceo.py`
+
+```py
+from app.ai.agents.registry import AgentDefinition, registry
+from app.core.ai_settings import ai_settings
+
+ceo_agent = AgentDefinition(
+    id="CEO",
+    name="Chief Executive Officer",
+    version="1.0",
+    system_prompt_template="ceo_system",
+    tools=[
+        "search_knowledge_base",
+        "get_document",
+        "list_documents",
+        "remember_fact",
+        "forget_fact",
+        "delegate_task",
+        "update_task_status"
+    ],
+    provider=ai_settings.DEFAULT_PROVIDER,
+    temperature=ai_settings.DEFAULT_TEMPERATURE,
+    max_tokens=2048,
+    enabled=True,
+)
+
+registry.register(ceo_agent)
+```
+
+---
+
+## `app/ai/prompts/templates/ceo_system.md`
+
+```text
+You are the Chief Executive Officer (CEO) of {{company_name}}.
+Your role is to orchestrate resources, plan strategically, and communicate clearly.
+
+## Context
+**Organization Name:** {{organization_name}}
+**Current User:** {{user_first_name}} {{user_last_name}}
+
+## Objectives
+- Drive high-level strategic alignment
+- Make clear, decisive choices based on available data
+- Delegate operational tasks to specialized tools or agents
+
+## Guidelines
+- Be concise and authoritative but supportive.
+- Do not make assumptions about data you haven't fetched. Use tools to verify metrics.
+- For multi-step or highly complex tasks, use the `update_task_status` tool to maintain a scratchpad of your plan and current progress.
+- Delegate specialized domain analysis directly to sub-agents (e.g., CFO for finance, COO for operations).
+- Keep responses professional and focused on business outcomes.
+- Cite your sources when using organizational knowledge.
+
+## Past Memory
+The following historical context, facts, and preferences are highly relevant to the current conversation:
+{{memory_context}}
+
+## Internal Knowledge
+The following internal documents and knowledge base articles may be relevant to the user's request:
+{{knowledge_context}}
+```
+
+---
+
+## `app/ai/tools/orchestration_tools.py`
+
+```py
+import logging
+from typing import Any
+from pydantic import BaseModel, Field
+from app.ai.tools.base import BaseTool
+from app.ai.agents.registry import registry
+
+logger = logging.getLogger(__name__)
+
+class DelegateTaskInput(BaseModel):
+    target_agent: str = Field(
+        ...,
+        description="The role name of the specialized agent to delegate to (e.g., 'CFO', 'COO', 'CTO')."
+    )
+    instructions: str = Field(
+        ...,
+        description="Detailed instructions and context for the sub-task. Be as explicit as possible."
+    )
+    original_goal: str = Field(
+        ...,
+        description="The original overall goal or user request that prompted this delegation, to provide full context."
+    )
+
+
+class DelegateTaskOutput(BaseModel):
+    result: str
+
+class DelegateTaskTool(BaseTool):
+    """
+    Allows a Supervisor agent (like the CEO) to delegate a sub-task to a specialized agent.
+    """
+    name: str = "delegate_task"
+    description: str = (
+        "Delegate a sub-task to a specialized agent. Use this when you need domain-specific "
+        "analysis (e.g., financial from the CFO) to answer the user's request."
+    )
+    input_schema = DelegateTaskInput
+    output_schema = DelegateTaskOutput
+
+    async def execute(self, target_agent: str, instructions: str, **kwargs) -> Any:
+        """
+        The actual execution of this tool is intercepted by the AIExecutionPipeline
+        to handle recursion, context building, and database persistence.
+        This method serves as a fallback or placeholder if invoked directly outside the pipeline.
+        """
+        if not registry.get_agent(target_agent):
+            return f"Error: Agent '{target_agent}' not found in the registry."
+
+        logger.warning("delegate_task was executed without pipeline interception.")
+        return "Sub-task delegated successfully."
+
+class UpdateTaskStatusInput(BaseModel):
+    step: str = Field(..., description="The name or description of the current planning step.")
+    status: str = Field(..., description="The status of the step (e.g., 'IN_PROGRESS', 'COMPLETED', 'PENDING', 'FAILED').")
+    notes: str = Field(..., description="Internal scratchpad notes, findings, or next actions.")
+
+class UpdateTaskStatusOutput(BaseModel):
+    result: str
+
+class UpdateTaskStatusTool(BaseTool):
+    """
+    Allows an agent to maintain a scratchpad or state tracking for multi-step tasks.
+    """
+    name: str = "update_task_status"
+    description: str = (
+        "Maintain a scratchpad of your current plan and progress. Use this to explicitly track "
+        "what steps you have completed, what you are currently doing, and what comes next."
+    )
+    input_schema = UpdateTaskStatusInput
+    output_schema = UpdateTaskStatusOutput
+
+    async def execute(self, step: str, status: str, notes: str, **kwargs) -> Any:
+        # Just returning it so the LLM has it in the context window
+        return f"Task State Updated.\nStep: {step}\nStatus: {status}\nNotes: {notes}"
+```
+
+---
+
+## `app/modules/ai_conversations/models.py`
+
+```py
+import uuid
+from typing import Optional, List
+from sqlalchemy import String, JSON, ForeignKey, Text, Enum as SQLEnum
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from app.models.base import TimestampedModel
+from app.ai.schemas import MessageRole
+
+class Conversation(TimestampedModel):
+    __tablename__ = "ai_conversations"
+
+    organization_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id"), index=True)
+    title: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+
+    # Metadata required by CTO
+    active_agent: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    provider: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    model: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    temperature: Mapped[Optional[float]] = mapped_column(nullable=True)
+
+    messages: Mapped[List["AIMessageModel"]] = relationship(
+        back_populates="conversation", cascade="all, delete-orphan", order_by="AIMessageModel.created_at"
+    )
+
+class AIMessageModel(TimestampedModel):
+    __tablename__ = "ai_messages"
+
+    conversation_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("ai_conversations.id"), index=True)
+
+    role: Mapped[MessageRole] = mapped_column(SQLEnum(MessageRole, name="message_role_enum"))
+    content: Mapped[str] = mapped_column(Text, default="")
+
+    name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    tool_calls: Mapped[Optional[list]] = mapped_column(JSON, nullable=True) # store list of ToolCall dicts as JSON
+    tool_call_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+
+    # Added in Sprint 007 for sub-agent orchestration
+    parent_message_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("ai_messages.id", ondelete="CASCADE"), nullable=True, index=True)
+
+    conversation: Mapped["Conversation"] = relationship(back_populates="messages")
+
+    # Self-referential relationships for the adjacency list
+    parent: Mapped[Optional["AIMessageModel"]] = relationship(
+        "AIMessageModel", remote_side="AIMessageModel.id", backref="children"
+    )
+```
+
+---
+
+## `alembic/versions/007_add_parent_message_id.py`
+
+```py
+"""add parent_message_id
+
+Revision ID: 007
+Revises: 006
+Create Date: 2026-07-09 11:00:00.000000
+
+"""
+from alembic import op
+import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
+
+# revision identifiers, used by Alembic.
+revision = '007'
+down_revision = '006'
+branch_labels = None
+depends_on = None
+
+def upgrade():
+    # ### commands auto generated by Alembic - please adjust! ###
+    op.add_column('ai_messages', sa.Column('parent_message_id', sa.UUID(), nullable=True))
+    op.create_index(op.f('ix_ai_messages_parent_message_id'), 'ai_messages', ['parent_message_id'], unique=False)
+    op.create_foreign_key('fk_ai_messages_parent_message_id', 'ai_messages', 'ai_messages', ['parent_message_id'], ['id'], ondelete='CASCADE')
+    # ### end Alembic commands ###
+
+def downgrade():
+    # ### commands auto generated by Alembic - please adjust! ###
+    op.drop_constraint('fk_ai_messages_parent_message_id', 'ai_messages', type_='foreignkey')
+    op.drop_index(op.f('ix_ai_messages_parent_message_id'), table_name='ai_messages')
+    op.drop_column('ai_messages', 'parent_message_id')
+    # ### end Alembic commands ###
+```
+
+---
+

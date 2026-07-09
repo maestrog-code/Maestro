@@ -57,5 +57,7 @@ class AISettings(BaseSettings):
     CHUNK_OVERLAP_TOKENS: int = 80
     KNOWLEDGE_MAX_CONTEXT_CHARS: int = 8000  # max chars injected into system prompt
 
+    # Sprint 007 — Orchestration
+    DELEGATION_MAX_CHARS: int = 4000
 
 ai_settings = AISettings()
