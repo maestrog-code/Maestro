@@ -69,6 +69,8 @@ class AIExecutionPipeline:
         Implicit RAG: run a quick search on the user's prompt to inject highly relevant
         context directly into the system prompt, saving a tool call round-trip.
         """
+        if self.db.bind and self.db.bind.dialect.name == "sqlite":
+            return []
         try:
             knowledge_service = KnowledgeService(self.db)
             search_resp = await knowledge_service.search(
@@ -94,6 +96,8 @@ class AIExecutionPipeline:
 
     async def _fetch_implicit_memory(self, user_prompt: str) -> List[Dict[str, Any]]:
         """Fetch highly relevant long-term memory for implicit injection."""
+        if self.db.bind and self.db.bind.dialect.name == "sqlite":
+            return []
         try:
             from app.modules.memory.services import MemoryService
             memory_service = MemoryService(self.db, embedding_provider=GeminiEmbeddingProvider())

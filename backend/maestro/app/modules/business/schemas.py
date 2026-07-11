@@ -4,7 +4,7 @@ from datetime import datetime, date
 from decimal import Decimal
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.modules.business.models import ProjectStatus, InvoiceStatus, TransactionType, TransactionCategory
+from app.modules.business.models import ProjectStatus, InvoiceStatus, TransactionType, TransactionCategory, BriefingStatus
 
 
 # ─── Project Schemas ────────────────────────────────────────────────────────────
@@ -161,5 +161,30 @@ class TransactionResponse(BaseModel):
     category: TransactionCategory
     date: date
     description: Optional[str]
+    created_at: datetime
+    updated_at: datetime
+
+
+# ─── Briefing Schemas ───────────────────────────────────────────────────────────
+
+class BriefingCreate(BaseModel):
+    date: date
+    content: Optional[str] = None
+    status: BriefingStatus = BriefingStatus.PROCESSING
+
+
+class BriefingUpdate(BaseModel):
+    content: Optional[str] = None
+    status: Optional[BriefingStatus] = None
+
+
+class BriefingResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    organization_id: UUID
+    date: date
+    content: Optional[str]
+    status: BriefingStatus
     created_at: datetime
     updated_at: datetime

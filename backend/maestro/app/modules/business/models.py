@@ -1,6 +1,6 @@
 from enum import Enum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy import String, ForeignKey, Date, Numeric, Enum as SQLEnum
+from sqlalchemy import String, ForeignKey, Date, Numeric, Enum as SQLEnum, UniqueConstraint
 import uuid
 from decimal import Decimal
 from datetime import date
@@ -105,3 +105,22 @@ class Transaction(TimestampedModel):
 
     # Relationships
     invoice = relationship("Invoice", back_populates="transactions")
+
+
+class BriefingStatus(str, Enum):
+    PROCESSING = "processing"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
+class Briefing(TimestampedModel):
+    __tablename__ = "briefings"
+
+    organization_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True, nullable=False)
+    date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    content: Mapped[str | None] = mapped_column(String, nullable=True)
+    status: Mapped[BriefingStatus] = mapped_column(SQLEnum(BriefingStatus), default=BriefingStatus.PROCESSING, nullable=False, index=True)
+
+    __table_args__ = (
+        UniqueConstraint("organization_id", "date", name="uq_briefing_org_date"),
+    )

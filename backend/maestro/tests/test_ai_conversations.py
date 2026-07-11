@@ -12,8 +12,8 @@ from app.ai.schemas import MessageRole
 
 @pytest.fixture
 def mock_google_provider():
-    with patch("app.ai.pipeline.executor.GoogleProvider") as MockProvider:
-        mock_instance = MockProvider.return_value
+    with patch("app.ai.pipeline.executor.get_llm_provider") as mock_get_provider:
+        mock_instance = mock_get_provider.return_value
         
         async def mock_stream(*args, **kwargs):
             yield "Hello, "
@@ -44,9 +44,9 @@ async def test_ai_chat_creates_conversation(
     async for line in response.aiter_lines():
         content += line + "\n"
         
-    assert "data: Hello, " in content
-    assert "data: I am " in content
-    assert "data: an AI." in content
+    assert 'data: {"text":"Hello, "}' in content
+    assert 'data: {"text":"I am "}' in content
+    assert 'data: {"text":"an AI."}' in content
     
     # Verify conversation was created
     result = await db.execute(select(Conversation).where(Conversation.organization_id == test_organization.id))

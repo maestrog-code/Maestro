@@ -5,10 +5,10 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.database import get_db
-from app.core.auth.dependencies import get_current_user
+from app.dependencies.database import get_db
+from app.dependencies.auth import get_current_user
 from app.modules.users.models import User
-from app.modules.organizations.services import OrganizationPermissionService
+from app.modules.organizations.services import require_member
 from app.modules.memory.services import MemoryService
 from app.modules.memory.schemas import MemoryCreate, MemoryUpdate, MemoryResponse, MemoryListResponse
 from app.ai.embedding.google import GeminiEmbeddingProvider
@@ -24,7 +24,7 @@ async def create_memory(
     current_user: User = Depends(get_current_user)
 ):
     """Manually add a memory for the organization."""
-    await OrganizationPermissionService.require_member(db, organization_id, current_user.id)
+    await require_member(db, organization_id, current_user.id)
     service = MemoryService(db, embedding_provider=GeminiEmbeddingProvider())
     
     new_memory = await service.add_memory(
@@ -49,7 +49,7 @@ async def list_memories(
     current_user: User = Depends(get_current_user)
 ):
     """List agent memories for an organization."""
-    await OrganizationPermissionService.require_member(db, organization_id, current_user.id)
+    await require_member(db, organization_id, current_user.id)
     service = MemoryService(db)
     
     items, total = await service.repo.list_by_organization(organization_id, page, page_size)
@@ -70,7 +70,7 @@ async def update_memory(
     current_user: User = Depends(get_current_user)
 ):
     """Update a memory or archive it (soft delete)."""
-    await OrganizationPermissionService.require_member(db, organization_id, current_user.id)
+    await require_member(db, organization_id, current_user.id)
     service = MemoryService(db)
     
     memory = await service.repo.get(organization_id, memory_id)

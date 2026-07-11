@@ -6,10 +6,10 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException, status
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.core.database import get_db
-from app.core.auth.dependencies import get_current_user
+from app.dependencies.database import get_db
+from app.dependencies.auth import get_current_user
 from app.modules.users.models import User
-from app.modules.organizations.services import OrganizationPermissionService
+from app.modules.organizations.services import require_member
 from app.modules.knowledge.services import KnowledgeService
 from app.modules.knowledge.schemas import (
     DocumentCreate,
@@ -39,7 +39,7 @@ async def upload_document(
     Upload a file to the knowledge base.
     Returns 202 Accepted because extraction and chunking happen asynchronously.
     """
-    await OrganizationPermissionService.require_member(db, organization_id, current_user.id)
+    await require_member(db, organization_id, current_user.id)
     service = KnowledgeService(db)
 
     document = await service.upload_file(
@@ -66,7 +66,7 @@ async def create_inline_note(
     """
     Create an inline text document in the knowledge base without uploading a file.
     """
-    await OrganizationPermissionService.require_member(db, organization_id, current_user.id)
+    await require_member(db, organization_id, current_user.id)
     service = KnowledgeService(db)
 
     document = await service.create_note(
@@ -91,7 +91,7 @@ async def list_documents(
     current_user: User = Depends(get_current_user)
 ):
     """List documents in the knowledge base."""
-    await OrganizationPermissionService.require_member(db, organization_id, current_user.id)
+    await require_member(db, organization_id, current_user.id)
     service = KnowledgeService(db)
     return await service.list_documents(organization_id, page, page_size)
 
@@ -104,7 +104,7 @@ async def get_document(
     current_user: User = Depends(get_current_user)
 ):
     """Get document details."""
-    await OrganizationPermissionService.require_member(db, organization_id, current_user.id)
+    await require_member(db, organization_id, current_user.id)
     service = KnowledgeService(db)
     
     doc = await service.get_document(organization_id, document_id)
@@ -122,7 +122,7 @@ async def delete_document(
     current_user: User = Depends(get_current_user)
 ):
     """Delete a document and its embeddings."""
-    await OrganizationPermissionService.require_member(db, organization_id, current_user.id)
+    await require_member(db, organization_id, current_user.id)
     service = KnowledgeService(db)
     success = await service.delete_document(organization_id, document_id, current_user)
     if not success:
@@ -137,7 +137,7 @@ async def search_knowledge(
     current_user: User = Depends(get_current_user)
 ):
     """Search the knowledge base via vector similarity."""
-    await OrganizationPermissionService.require_member(db, organization_id, current_user.id)
+    await require_member(db, organization_id, current_user.id)
     service = KnowledgeService(db)
     
     return await service.search(

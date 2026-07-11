@@ -20,6 +20,10 @@ celery_app.conf.beat_schedule = {
         "task": "app.workers.memory_tasks.decay_memories_task",
         "schedule": crontab(hour=0, minute=0),  # Run daily at midnight
     },
+    "generate-daily-briefings-daily": {
+        "task": "business.generate_daily_briefings",
+        "schedule": crontab(hour=6, minute=0),  # Run daily at 6:00 AM
+    },
 }
 
 

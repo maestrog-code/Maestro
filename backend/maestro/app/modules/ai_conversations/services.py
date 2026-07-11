@@ -22,7 +22,10 @@ class AIConversationService:
         conv = Conversation(organization_id=organization_id)
         db.add(conv)
         await db.commit()
-        await db.refresh(conv)
+        from sqlalchemy.orm import selectinload
+        from sqlalchemy import select
+        stmt = select(Conversation).options(selectinload(Conversation.messages)).where(Conversation.id == conv.id)
+        conv = (await db.execute(stmt)).scalar_one()
         return conv
 
     @staticmethod
