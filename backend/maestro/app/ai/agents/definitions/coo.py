@@ -1,18 +1,18 @@
 from app.ai.agents.registry import AgentDefinition, registry
 from app.core.ai_settings import ai_settings
 
-cfo_agent = AgentDefinition(
-    id="CFO",
-    name="Chief Financial Officer",
+coo_agent = AgentDefinition(
+    id="COO",
+    name="Chief Operations Officer",
     version="1.0",
-    system_prompt_template="cfo_system",
+    system_prompt_template="coo_system",
     tools=[
         "search_knowledge_base",
         "get_document",
         "list_documents",
         "remember_fact",
         "forget_fact",
-        "fetch_financial_metrics"
+        "check_resource_allocation"
     ],
     provider=ai_settings.DEFAULT_PROVIDER,
     temperature=ai_settings.DEFAULT_TEMPERATURE,
@@ -20,4 +20,4 @@ cfo_agent = AgentDefinition(
     enabled=True,
 )
 
-registry.register(cfo_agent)
+registry.register(coo_agent)

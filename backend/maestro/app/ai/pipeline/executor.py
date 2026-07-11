@@ -24,6 +24,7 @@ from app.modules.organizations.models import Organization
 from app.ai.tools.knowledge_tools import SearchKnowledgeBaseTool, GetDocumentTool, ListDocumentsTool
 from app.ai.tools.memory_tools import RememberFactTool, ForgetFactTool
 from app.ai.tools.orchestration_tools import DelegateTaskTool, UpdateTaskStatusTool
+from app.ai.tools.business_tools import FetchFinancialMetricsTool, CheckResourceAllocationTool
 from app.ai.embedding.google import GeminiEmbeddingProvider
 from app.modules.knowledge.services import KnowledgeService
 
@@ -57,6 +58,10 @@ class AIExecutionPipeline:
                 instances.append(DelegateTaskTool())
             elif name == "update_task_status":
                 instances.append(UpdateTaskStatusTool())
+            elif name == "fetch_financial_metrics":
+                instances.append(FetchFinancialMetricsTool(self.db, self.organization.id))
+            elif name == "check_resource_allocation":
+                instances.append(CheckResourceAllocationTool(self.db, self.organization.id))
         return instances
 
     async def _fetch_implicit_context(self, user_prompt: str) -> List[Dict[str, Any]]:
