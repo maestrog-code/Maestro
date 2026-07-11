@@ -67,12 +67,12 @@ organization's own data.
 
 ## Current Sprint
 
-**Sprint 007 — Agent Orchestration Engine**
-**Branch:** `feature/agent-orchestration-engine` (to be created)
+**Sprint 010 — Business Tools & Dashboards**
+**Branch:** `feature/sprint-010-business-tools`
 
-### Sprint 007 Goals
+### Sprint 010 Goals
 
-Agents that can delegate subtasks, plan across multiple steps, and coordinate with other agents (e.g. CEO delegating to CFO).
+Build revenue forecasting dashboards, register business models (e.g. Invoices, Projects) to run complex SQLAlchemy joins, write Celery-scheduled tasks to automate daily briefings, and scaffold notification endpoints.
 
 ---
 
@@ -278,13 +278,13 @@ No changes required in the pipeline.
 | 005 | Organizational Knowledge Engine | 9.9/10 | ✅ Done |
 | 006 | The Memory System | 9.95/10| ✅ Done |
 | v0.1.0 | Stabilisation Milestone | — | 🔄 Next |
-| 007 | Agent Orchestration Engine | — | ⬜ Planned |
-| 008 | Business Tools (CRM, Finance, HR) | — | ⬜ Planned |
-| 009 | Autonomous Workflows | — | ⬜ Planned |
-| 010 | Executive Dashboards & Analytics | — | ⬜ Planned |
+| 007 | Agent Orchestration Engine | — | ✅ Done |
+| 008 | Multi-Agent Streaming (SSE) | — | ✅ Done |
+| 009 | Frontend UI & SSE Consumption | 10/10 | ✅ Done |
+| 010 | Business Tools & Dashboards | — | 🔄 In Progress |
 | 011 | Production Hardening | — | ⬜ Planned |
 
 ---
 
-*Last updated: Sprint 006 complete — July 2026*
+*Last updated: Sprint 009 complete — July 2026*
 *Feed this document to any AI before starting a new session on MAESTRO.*

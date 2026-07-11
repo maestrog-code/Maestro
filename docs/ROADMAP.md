@@ -180,35 +180,36 @@
   - Exponential decay of memory importance (`decay_memories_task`)
   - Centralized `MemoryPolicy` for lifecycle control
 
-- [ ] **Sprint 007: Agent Orchestration Engine**
-  - Next task.
+- [x] **Sprint 007: Agent Orchestration Engine** ✅ DONE
+  - [x] Task delegation via `delegate_task` tool
+  - [x] Agent-to-agent routing and nested context management
+  - [x] CEO scratchpad updates via `update_task_status`
+  - [x] Task memory (multi-step conversations with parent_message_id)
 
-- [ ] Planning agent (task decomposition)
-- [ ] Agent-to-agent routing
-- [ ] Shared organizational context between agents
-- [ ] Task memory (multi-step conversations)
+- [x] **Sprint 008: Multi-Agent Streaming (SSE)** ✅ DONE
+  - [x] Pydantic SSE StreamEvents (`TokenEvent`, `OrchestrationEvent`, etc.)
+  - [x] Streaming context propagation and nested stream filtering
+  - [x] Tool lifecycle hooks (`ToolCallEvent`)
 
 ---
 
 ## Phase 3 — Business Modules
 
-### Sprint 007 — Business Tools (CRM, Finance, HR, Projects)
-- CRM: Customer profiles, contact history, pipeline
-- Finance: Invoices, expenses, P&L basics
-- HR: Staff profiles, attendance
-- Projects: Tasks, deadlines
+### Sprint 009 — Frontend UI & SSE Consumption (Next.js) ✅ DONE
+- [x] Next.js App Router scaffold
+- [x] Zustand global state for orchestrator (`useChatStore`)
+- [x] SSE streaming client with AbortController
+- [x] Real-time dynamic UI for agent orchestration and tool loading
+- [x] Premium Dark Mode aesthetic (Framer Motion, Tailwind Typography)
+- [x] Sub-agent execution log streaming (Detail Drawer and Inline Telemetry Cards)
 
-### Sprint 008 — Autonomous Workflows & Scheduled AI Tasks
-- Trigger-based workflows (e.g., low stock → reorder)
-- Scheduled AI briefings
-- Automated follow-ups
+### Sprint 010 — Business Tools & Dashboards
+- **Dashboards:** Revenue trends, KPI aggregation
+- **Business Models (Option A):** Scaffold placeholder models (Invoices, Projects) to test real SQLAlchemy joins instead of JSON stubs.
+- **AI Daily Briefing:** Scheduled Celery task (`generate_daily_briefings`) to prepare morning reports proactively.
+- **Notifications:** Standard polling REST API (`GET /notifications`) for MVP alerts.
 
-### Sprint 009 — Executive Dashboards & Analytics
-- Revenue trends, KPI aggregation
-- AI-generated daily briefing
-- Notification system (in-app)
-
-### Sprint 010 — Production Hardening
+### Sprint 011 — Production Hardening
 - Performance profiling and optimization
 - Horizontal scaling validation
 - Full observability stack (metrics, traces, alerts)
