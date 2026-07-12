@@ -1,3 +1,169 @@
+# MAESTRO — Sprint 011 Step 2 CTO Review Package
+
+Paste this entire document into ChatGPT for the code review.
+
+---
+
+## Context
+
+Sprint 011 Step 2 (Frontend Scaffold) is on branch `main`.
+This document contains the Next.js layout and KPI card implementation.
+
+---
+
+## `../../web/src/components/dashboard/ExecutiveDashboard.tsx`
+
+```tsx
+"use client";
+
+import React from "react";
+import useSWR from "swr";
+import { DollarSign, Percent, Cpu, Clock, TrendingUp, TrendingDown, AlertTriangle } from "lucide-react";
+
+const fetcher = (url: string) => fetch(url).then((res) => {
+  if (!res.ok) throw new Error("Failed to pull backend telemetry");
+  return res.json();
+});
+
+interface ExecutiveDashboardProps {
+  orgId: string;
+}
+
+export function ExecutiveDashboard({ orgId }: ExecutiveDashboardProps) {
+  // Wire up the live API endpoint to SWR
+  const { data: telemetry, error: metricsError } = useSWR(
+    `http://localhost:8000/api/v1/organizations/${orgId}/dashboard/metrics`,
+    fetcher,
+    { refreshInterval: 30000 } // Auto-poll every 30 seconds
+  );
+
+  const isLoading = !telemetry && !metricsError;
+
+  return (
+    <div className="mx-auto w-full max-w-6xl px-6 py-8 h-full overflow-y-auto custom-scrollbar">
+      {/* Dashboard Top Header Bar */}
+      <header className="flex flex-col gap-4 border-b border-white/5 pb-6 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-pretty text-xl font-semibold tracking-tight text-white sm:text-2xl">
+            Executive Performance Overview
+          </h1>
+          <p className="mt-1 text-sm text-zinc-500">
+            Real-time autonomous metrics compiled directly from system accounting ledgers.
+          </p>
+        </div>
+        <span className="inline-flex w-fit items-center gap-2 rounded-full border border-white/5 bg-zinc-900/60 px-3 py-1.5 text-xs font-medium text-zinc-400 backdrop-blur-xl">
+          <Clock className="size-3.5 text-blue-400" />
+          Generated: Today, 6:00 AM
+        </span>
+      </header>
+
+      {/* KPI Three-Column Grid Matrix */}
+      <section className="mt-6 grid grid-cols-1 gap-6 md:grid-cols-3">
+        {/* Card 1: Gross Revenue */}
+        <KpiCard
+          label="Gross Revenue"
+          value={isLoading ? "..." : telemetry?.financials?.total_revenue}
+          delta={isLoading ? "" : telemetry?.financials?.gross_revenue_delta}
+          trend="up"
+          icon={<DollarSign className="size-4" />}
+          note={isLoading ? "Evaluating statement data..." : telemetry?.financials?.revenue_note}
+          loading={isLoading}
+        />
+
+        {/* Card 2: Net Margin */}
+        <KpiCard
+          label="Net Margin"
+          value={isLoading ? "..." : telemetry?.financials?.net_margin}
+          delta={isLoading ? "" : telemetry?.financials?.net_margin_delta}
+          trend="up"
+          icon={<Percent className="size-4" />}
+          note={isLoading ? "Rebalancing accounting rows..." : telemetry?.financials?.margin_note}
+          loading={isLoading}
+        />
+
+        {/* Card 3: Team Bandwidth Utilization */}
+        <KpiCard
+          label="Team Utilization"
+          value={isLoading ? "..." : telemetry?.operations?.avg_utilization}
+          delta={isLoading ? "" : telemetry?.operations?.delta}
+          trend={isLoading ? "up" : telemetry?.operations?.trend}
+          icon={<Cpu className="size-4" />}
+          note={isLoading ? "Auditing production allocation logs..." : telemetry?.operations?.note}
+          loading={isLoading}
+        />
+      </section>
+
+      {/* Placeholder grid zone for Step 3 components (Briefing and Projects Table) */}
+      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3 opacity-30 pointer-events-none">
+        <div className="lg:col-span-2 border border-dashed border-white/10 rounded-2xl h-64 flex items-center justify-center text-xs font-mono text-zinc-500">
+          [Step 3 — CEO Briefing Reader Dock]
+        </div>
+        <div className="border border-dashed border-white/10 rounded-2xl h-64 flex items-center justify-center text-xs font-mono text-zinc-500">
+          [Step 3 — Active Projects Progress Table]
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Nested Sub-Component with Integrated Skeleton Shimmer support
+interface KpiCardProps {
+  label: string;
+  value: string;
+  delta: string;
+  trend: "up" | "down" | "warning";
+  icon: React.ReactNode;
+  note: string;
+  loading: boolean;
+}
+
+function KpiCard({ label, value, delta, trend, icon, note, loading }: KpiCardProps) {
+  const trendStyles = {
+    up: "text-emerald-400 bg-emerald-500/10 ring-1 ring-emerald-500/20",
+    down: "text-red-400 bg-red-500/10 ring-1 ring-red-500/20",
+    warning: "text-amber-400 bg-amber-500/10 ring-1 ring-amber-500/20",
+  };
+
+  const TrendIcon = trend === "warning" ? AlertTriangle : trend === "down" ? TrendingDown : TrendingUp;
+
+  return (
+    <div className="group relative overflow-hidden rounded-2xl border border-white/5 bg-zinc-900/40 p-6 backdrop-blur-xl transition-all duration-300 hover:border-white/10">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="flex size-9 items-center justify-center rounded-lg border border-white/5 bg-white/5 text-zinc-300">
+            {icon}
+          </div>
+          <span className="text-sm font-medium text-zinc-400">{label}</span>
+        </div>
+        {!loading && (
+          <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold animate-fade-in ${trendStyles[trend]}`}>
+            <TrendIcon className="size-3.5" />
+            {delta}
+          </span>
+        )}
+      </div>
+
+      <div className="mt-5">
+        {loading ? (
+          <div className="h-9 w-28 rounded bg-zinc-800 animate-pulse" />
+        ) : (
+          <p className="text-3xl font-semibold tracking-tight text-white tabular-nums animate-fade-in">
+            {value}
+          </p>
+        )}
+      </div>
+      
+      <p className="mt-2 text-xs text-zinc-500 tracking-wide">{note}</p>
+    </div>
+  );
+}
+```
+
+---
+
+## `../../web/src/app/page.tsx`
+
+```tsx
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
@@ -332,3 +498,48 @@ export default function Home() {
     </div>
   );
 }
+```
+
+---
+
+## `app/core/config.py`
+
+```py
+from typing import List, Union
+from pydantic import AnyHttpUrl, validator
+from pydantic_settings import BaseSettings
+
+class Settings(BaseSettings):
+    PROJECT_NAME: str = "Maestro"
+    VERSION: str = "0.1.0"
+    API_V1_STR: str = "/api/v1"
+
+    ENVIRONMENT: str = "development"
+
+    BACKEND_CORS_ORIGINS: List[AnyHttpUrl] = ["http://localhost:3000"]
+
+    @validator("BACKEND_CORS_ORIGINS", pre=True)
+    def assemble_cors_origins(cls, v: Union[str, List[str]]) -> Union[List[str], str]:
+        if isinstance(v, str) and not v.startswith("["):
+            return [i.strip() for i in v.split(",")]
+        elif isinstance(v, (list, str)):
+            return v
+        raise ValueError(v)
+
+    DATABASE_URL: str = "postgresql+asyncpg://maestro_user:maestro_password@localhost:5432/maestro_db"
+    REDIS_URL: str = "redis://redis:6379/0"
+
+    # JWT Settings
+    SECRET_KEY: str = "change-me-in-production-use-a-long-random-string"
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+
+    class Config:
+        env_file = ".env"
+        case_sensitive = True
+
+settings = Settings()
+```
+
+---
+

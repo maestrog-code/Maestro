@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Dict, Any, List
 from uuid import UUID
 from datetime import datetime, date
 from decimal import Decimal
@@ -188,3 +188,17 @@ class BriefingResponse(BaseModel):
     status: BriefingStatus
     created_at: datetime
     updated_at: datetime
+
+
+# ─── Dashboard Schemas ──────────────────────────────────────────────────────────
+
+class DashboardMetricsResponse(BaseModel):
+    financials: Dict[str, Any]
+    operations: Dict[str, Any]
+    active_projects: List[Dict[str, Any]]
+
+class LatestBriefingResponse(BaseModel):
+    id: UUID
+    date: date
+    status: BriefingStatus
+    content: Optional[str]

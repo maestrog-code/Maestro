@@ -1,7 +1,7 @@
 # MAESTRO — Development Roadmap
 
-> Status as of Sprint 004 — July 2026
-> Tag: `sprint-004` | Branch: `main`
+> Status as of Sprint 010 — July 2026
+> Tag: `sprint-010` | Branch: `main`
 
 ---
 
@@ -203,13 +203,15 @@
 - [x] Premium Dark Mode aesthetic (Framer Motion, Tailwind Typography)
 - [x] Sub-agent execution log streaming (Detail Drawer and Inline Telemetry Cards)
 
-### Sprint 010 — Business Tools & Dashboards
-- **Dashboards:** Revenue trends, KPI aggregation
-- **Business Models (Option A):** Scaffold placeholder models (Invoices, Projects) to test real SQLAlchemy joins instead of JSON stubs.
-- **AI Daily Briefing:** Scheduled Celery task (`generate_daily_briefings`) to prepare morning reports proactively.
-- **Notifications:** Standard polling REST API (`GET /notifications`) for MVP alerts.
+### Sprint 010 — Business Tools & Automation ✅ DONE
+- [x] **Business Models (Option A):** Scaffold placeholder models (Invoices, Projects) to test real SQLAlchemy joins instead of JSON stubs.
+- [x] **Agent Tool Wiring:** Implement `FetchFinancialMetricsTool` and `CheckResourceAllocationTool` (CFO/COO tools).
+- [x] **AI Daily Briefing:** Scheduled Celery task (`generate_daily_briefings`) to prepare morning reports proactively.
 
-### Sprint 011 — Production Hardening
+### Sprint 011 — Executive Dashboard (Option 1) ✅ DONE
+- [x] **Backend Scaffold:** Restructure and register Dashboard API endpoints (`/metrics`, `/briefing/latest`) to serve UI.
+- [x] **Frontend UI:** Scaffold the Next.js Executive Dashboard Layout (Grid/Shell) and KPI Cards.
+- [x] **Notifications:** Standard polling REST API (`GET /notifications`) for MVP alerts.
 - Performance profiling and optimization
 - Horizontal scaling validation
 - Full observability stack (metrics, traces, alerts)
@@ -261,4 +263,4 @@
 
 ---
 
-*Last updated: Sprint 006 complete — July 2026*
+*Last updated: Sprint 011 complete — July 2026*
