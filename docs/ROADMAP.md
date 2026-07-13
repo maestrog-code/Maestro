@@ -1,7 +1,7 @@
 # MAESTRO — Development Roadmap
 
-> Status as of Sprint 012 — July 2026
-> Tag: `sprint-012` | Branch: `main`
+> Status as of Sprint 013 — July 2026
+> Tag: `sprint-013` | Branch: `main`
 
 ---
 
@@ -219,6 +219,12 @@
 - [x] **Premium Login UI:** Glassmorphic `/login` component with SVG branding.
 - [x] **Multi-Tenant Hydration:** Zustand global store `activeOrganization` sync and SWR dynamic context fetching.
 
+### Sprint 013 — Infrastructure & Deployment (Vercel & Render) ✅ DONE
+- [x] **Phase 1: Codebase Hardening:** Dynamic environment routing (`NEXT_PUBLIC_API_URL`) and secure cookies payload enforcement.
+- [x] **Phase 2: Render Infrastructure:** `render.yaml` configuration with `start.sh` Zero-Budget Hack (Co-locating FastAPI + Celery).
+- [x] **Phase 3: CI/CD Resolution:** Fixed Python type hints and missing dependencies inside production linux containers.
+- [x] **Phase 4: Next.js Vercel Deploy:** Hydrated Next.js 15+ proxy configs, successfully deploying full frontend to Edge Network.
+
 ### Future Scale & Optimizations
 - Performance profiling and optimization
 - Horizontal scaling validation
@@ -271,4 +277,4 @@
 
 ---
 
-*Last updated: Sprint 012 complete — July 2026*
+*Last updated: Sprint 013 complete — July 2026*
