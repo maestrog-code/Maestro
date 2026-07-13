@@ -61,3 +61,58 @@ export async function logoutAction() {
   cookieStore.delete("maestro_session");
   redirect("/login");
 }
+
+export async function signupAction(prevState: any, formData: FormData) {
+  const email = formData.get("email") as string;
+  const password = formData.get("password") as string;
+  const company = formData.get("company") as string;
+
+  if (!email || !password || !company) {
+    return { error: "All fields are required to provision a workspace." };
+  }
+
+  try {
+    // 1. Register User
+    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/v1/auth/register`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ 
+        email: email, 
+        password: password
+      }),
+    });
+
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => null);
+      return { error: errorData?.detail || "Registration failed. Email might already exist." };
+    }
+
+    const data = await res.json();
+    const token = data.token.access_token;
+
+    // 2. Provision Workspace (Organization)
+    const orgRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/v1/organizations/`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}`
+      },
+      body: JSON.stringify({ 
+        name: company 
+      }),
+    });
+
+    if (!orgRes.ok) {
+      return { error: "User created, but workspace provisioning failed." };
+    }
+
+  } catch (error) {
+    console.error("Signup Server Action Error:", error);
+    return { error: "Failed to connect to the authentication server." };
+  }
+
+  // Redirect to login upon successful workspace creation
+  redirect("/login?registered=true");
+}
