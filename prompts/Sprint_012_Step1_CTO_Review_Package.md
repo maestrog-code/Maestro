@@ -1,3 +1,145 @@
+# MAESTRO — Sprint 012 Step 1 CTO Review Package
+
+Paste this entire document into ChatGPT for the code review.
+
+---
+
+## Context
+
+Sprint 012 Step 1.
+This document contains the Next.js Server Actions for auth, the new SVG MaestroLogo component, the sidebar implementation in page.tsx, and the backend auth dependency update.
+
+---
+
+## `../../web/src/app/actions/auth.ts`
+
+```tsx
+"use server";
+
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
+
+export async function loginAction(prevState: any, formData: FormData) {
+  const email = formData.get("email") as string;
+  const password = formData.get("password") as string;
+
+  if (!email || !password) {
+    return { error: "Email and password are required." };
+  }
+
+  try {
+    const params = new URLSearchParams();
+    params.append("username", email);
+    params.append("password", password);
+
+    const res = await fetch("http://localhost:8000/api/v1/auth/login", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: params,
+    });
+
+    if (!res.ok) {
+      // Handle known errors cleanly
+      if (res.status === 401 || res.status === 422) {
+        return { error: "Invalid credentials." };
+      }
+      return { error: "An unexpected server error occurred." };
+    }
+
+    const data = await res.json();
+    const token = data.token.access_token;
+    const maxAge = 30 * 60; // 30 minutes in seconds
+
+    // Set HTTP-only cookie
+    cookies().set("maestro_session", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: maxAge,
+      path: "/",
+    });
+
+  } catch (error) {
+    console.error("Login Server Action Error:", error);
+    return { error: "Failed to connect to the authentication server." };
+  }
+
+  // Redirect on success (Next.js redirect throws an error under the hood, 
+  // so it must be called outside the try/catch block)
+  redirect("/");
+}
+
+export async function logoutAction() {
+  cookies().delete("maestro_session");
+  redirect("/login");
+}
+```
+
+---
+
+## `../../web/src/components/ui/MaestroLogo.tsx`
+
+```tsx
+import React from 'react';
+
+interface MaestroLogoProps {
+  className?: string;
+}
+
+export function MaestroLogo({ className = "w-10 h-10" }: MaestroLogoProps) {
+  return (
+    <svg 
+      viewBox="0 0 100 100" 
+      className={className} 
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <defs>
+        <filter id="neonGlow" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+          <feMerge>
+            <feMergeNode in="coloredBlur"/>
+            <feMergeNode in="SourceGraphic"/>
+          </feMerge>
+        </filter>
+      </defs>
+
+      {/* Connecting strokes */}
+      <path 
+        d="M20 80 L35 30 L50 60 L65 30 L80 80" 
+        fill="none" 
+        stroke="currentColor" 
+        strokeWidth="4" 
+        strokeLinecap="round" 
+        strokeLinejoin="round" 
+        className="text-zinc-600"
+      />
+
+      {/* Base nodes (circles) */}
+      <circle cx="20" cy="80" r="5" className="fill-zinc-800 stroke-zinc-700" strokeWidth="2" />
+      <circle cx="35" cy="30" r="5" className="fill-zinc-800 stroke-zinc-700" strokeWidth="2" />
+      <circle cx="65" cy="30" r="5" className="fill-zinc-800 stroke-zinc-700" strokeWidth="2" />
+      <circle cx="80" cy="80" r="5" className="fill-zinc-800 stroke-zinc-700" strokeWidth="2" />
+
+      {/* Glowing Center Core */}
+      <circle 
+        cx="50" 
+        cy="60" 
+        r="6" 
+        className="fill-cyan-400" 
+        filter="url(#neonGlow)"
+      />
+    </svg>
+  );
+}
+```
+
+---
+
+## `../../web/src/app/page.tsx`
+
+```tsx
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
@@ -23,8 +165,8 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ExecutiveDashboard } from "@/components/dashboard/ExecutiveDashboard";
-import useSWR from "swr";
 
+const DEFAULT_ORG_ID = "00000000-0000-0000-0000-000000000000";
 
 const SUGGESTIONS = [
   {
@@ -47,8 +189,6 @@ const SUGGESTIONS = [
 export default function Home() {
   const [activeView, setActiveView] = useState<"chat" | "dashboard">("dashboard");
   const { 
-    activeOrganization,
-    setActiveOrganization,
     messages, 
     isStreaming, 
     isSimulationMode, 
@@ -59,26 +199,6 @@ export default function Home() {
   } = useChatStore();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
-
-  // Unified SWR multi-tenant organization fetch handler
-  const { data: organizations, error: orgsError } = useSWR(
-    `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/v1/organizations`,
-    (url) => fetch(url, { credentials: "include" }).then((res) => {
-      if (!res.ok) throw new Error("Workspace validation failed");
-      return res.json();
-    }),
-    {
-      revalidateOnFocus: false,
-      onSuccess: (data) => {
-        // Automatically hydrate store with user's primary organization context
-        if (data?.length > 0 && !activeOrganization) {
-          setActiveOrganization(data[0]);
-        }
-      }
-    }
-  );
-
-  const isHydratingWorkspace = !organizations && !orgsError;
 
   // Auto-scroll to bottom of messages
   useEffect(() => {
@@ -93,39 +213,8 @@ export default function Home() {
     }
     abortControllerRef.current = new AbortController();
 
-    await sendChatMessage(currentOrgId, prompt, abortControllerRef.current.signal);
+    await sendChatMessage(DEFAULT_ORG_ID, prompt, abortControllerRef.current.signal);
   };
-
-  // 1. Guardrail: Handle active hydration loader state
-  if (isHydratingWorkspace) {
-    return (
-      <div className="flex min-h-screen w-full items-center justify-center bg-[#050505] font-sans">
-        <div className="flex flex-col items-center gap-4 animate-pulse">
-          <MaestroLogo className="w-16 h-16" />
-          <p className="text-[10px] uppercase font-mono tracking-widest text-zinc-600">
-            Synchronizing Workspace Security Context...
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  // 2. Guardrail: Handle empty organizational clearance zones
-  if (orgsError || !organizations || organizations.length === 0) {
-    return (
-      <div className="flex min-h-screen w-full items-center justify-center bg-[#050505] font-sans px-6 text-center">
-        <div className="max-w-md p-8 rounded-2xl border border-red-500/10 bg-red-500/5 text-zinc-100 backdrop-blur-xl">
-          <p className="text-sm font-semibold text-red-400 mb-2">Access Control Denied</p>
-          <p className="text-xs text-zinc-400 leading-relaxed">
-            Your credentials validated successfully, but your profile lacks active security clearance for an enterprise workspace tenant. Contact an administrator to map your organizational access controls.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  // Fallback anchor to guarantee resolution values are locked
-  const currentOrgId = activeOrganization?.id || organizations[0]?.id;
 
   return (
     <div className="flex h-screen w-full bg-[#050505] text-zinc-100 overflow-hidden font-sans">
@@ -256,7 +345,7 @@ export default function Home() {
       {/* Main Chat Area */}
       <main className="flex flex-col flex-1 h-full min-w-0 relative z-10 bg-zinc-950/20">
         {activeView === "dashboard" ? (
-          <ExecutiveDashboard orgId={currentOrgId} />
+          <ExecutiveDashboard orgId={DEFAULT_ORG_ID} />
         ) : (
           <>
         {/* Top Header */}
@@ -338,7 +427,7 @@ export default function Home() {
 
         {/* Input Bar */}
         <div className="border-t border-white/5 backdrop-blur-md bg-[#050505]/60 z-20">
-          <ChatInput orgId={currentOrgId} />
+          <ChatInput orgId={DEFAULT_ORG_ID} />
         </div>
         </>
         )}
@@ -389,3 +478,236 @@ export default function Home() {
     </div>
   );
 }
+```
+
+---
+
+## `../../web/src/app/login/page.tsx`
+
+```tsx
+"use client";
+
+import React, { useState } from "react";
+import { loginAction } from "@/app/actions/auth";
+import { MaestroLogo } from "@/components/ui/MaestroLogo";
+import { ArrowRight, Loader2, ShieldAlert } from "lucide-react";
+import { useFormState, useFormStatus } from "react-dom";
+
+// Note: Using React 19's useFormState. If using an older React, this would need custom useState logic.
+// We'll just manage state manually for maximum compatibility if useFormState isn't available, but since Next.js 14+ supports it via react-dom, we can use it.
+// Actually, to be extremely robust without worrying about experimental flags, let's use a standard useState wrapper around the server action.
+
+export default function LoginPage() {
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, setIsPending] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setIsPending(true);
+    setError(null);
+
+    const formData = new FormData(e.currentTarget);
+    const result = await loginAction(null, formData);
+
+    if (result?.error) {
+      setError(result.error);
+      setIsPending(false);
+    }
+    // On success, loginAction handles the redirect, so we don't need to unset isPending
+  };
+
+  return (
+    <div className="flex min-h-screen w-full items-center justify-center bg-[#050505] text-zinc-100 font-sans relative overflow-hidden">
+      {/* Dynamic radial glow background */}
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(59,130,246,0.05),transparent_50%),radial-gradient(circle_at_50%_100%,rgba(147,51,234,0.05),transparent_50%)] pointer-events-none" />
+
+      <div className="relative z-10 w-full max-w-md px-6">
+        <div className="flex flex-col items-center mb-8">
+          <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-white/[0.02] border border-white/5 shadow-2xl mb-6">
+            <MaestroLogo className="w-14 h-14" />
+          </div>
+          <h1 className="text-2xl font-bold tracking-tight text-zinc-100 mb-2">
+            Welcome to MAESTRO
+          </h1>
+          <p className="text-sm text-zinc-500 text-center">
+            Authenticate to access the Executive Board Room.
+          </p>
+        </div>
+
+        <div className="rounded-2xl border border-white/5 bg-zinc-900/40 p-8 backdrop-blur-xl shadow-2xl">
+          <form onSubmit={handleSubmit} className="space-y-5">
+            {error && (
+              <div className="flex items-center gap-2 p-3 text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg animate-fade-in">
+                <ShieldAlert size={16} className="shrink-0" />
+                <p>{error}</p>
+              </div>
+            )}
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider block">
+                Executive Email
+              </label>
+              <input
+                name="email"
+                type="email"
+                required
+                placeholder="executive@maestro.ai"
+                className="w-full bg-zinc-950/50 border border-white/5 rounded-lg px-4 py-2.5 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider block">
+                Security Clearance
+              </label>
+              <input
+                name="password"
+                type="password"
+                required
+                placeholder="••••••••••••"
+                className="w-full bg-zinc-950/50 border border-white/5 rounded-lg px-4 py-2.5 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={isPending}
+              className="w-full flex items-center justify-center gap-2 bg-zinc-100 hover:bg-white text-zinc-900 py-2.5 rounded-lg text-sm font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed mt-2"
+            >
+              {isPending ? (
+                <Loader2 size={16} className="animate-spin" />
+              ) : (
+                <>
+                  Initialize Session <ArrowRight size={16} />
+                </>
+              )}
+            </button>
+          </form>
+        </div>
+
+        <div className="mt-8 text-center">
+          <p className="text-[10px] text-zinc-600 uppercase tracking-widest font-mono">
+            Secure Endpoint Connection
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+```
+
+---
+
+## `app/dependencies/auth.py`
+
+```py
+from fastapi import Depends, HTTPException, status, Request
+from fastapi.security import OAuth2PasswordBearer
+from jose import jwt, JWTError
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.core.config import settings
+from app.dependencies.database import get_db
+from app.modules.users.repositories import user_repository
+from app.modules.users.models import User
+import uuid
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/auth/login")
+
+async def get_current_user(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    token = request.cookies.get("maestro_session")
+    if not token:
+        authorization: str = request.headers.get("Authorization")
+        if authorization and authorization.startswith("Bearer "):
+            token = authorization.split(" ")[1]
+        
+    if not token:
+        raise credentials_exception
+
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        user_id: str = payload.get("sub")
+        if user_id is None:
+            raise credentials_exception
+    except JWTError:
+        raise credentials_exception
+        
+    user = await user_repository.get(db, id=uuid.UUID(user_id))
+    if user is None:
+        raise credentials_exception
+    return user
+```
+
+---
+
+## `app/core/auth/router.py`
+
+```py
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordRequestForm
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.dependencies.database import get_db
+from app.core.auth.schemas import LoginRequest, AuthResponse, Token
+from app.modules.users.schemas import UserCreate, UserResponse
+from app.core.auth.services import authenticate_user, create_refresh_token
+from app.modules.users.services import create_user
+from app.core.security.jwt import create_access_token
+from datetime import timedelta
+
+router = APIRouter()
+
+@router.post("/register", response_model=AuthResponse)
+async def register(user_in: UserCreate, db: AsyncSession = Depends(get_db)):
+    user = await create_user(db, user_in)
+    access_token = create_access_token(subject=str(user.id))
+    refresh_token = await create_refresh_token(db, user.id)
+    return AuthResponse(
+        user=user,
+        token=Token(access_token=access_token, refresh_token=refresh_token)
+    )
+
+@router.post("/login", response_model=AuthResponse)
+async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)):
+    login_req = LoginRequest(email=form_data.username, password=form_data.password)
+    user = await authenticate_user(db, login_req)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect email or password")
+    
+    access_token = create_access_token(subject=str(user.id))
+    refresh_token = await create_refresh_token(db, user.id)
+    return AuthResponse(
+        user=user,
+        token=Token(access_token=access_token, refresh_token=refresh_token)
+    )
+
+@router.post("/verify-email")
+async def verify_email(token: str):
+    # Placeholder for email verification
+    return {"message": "Email verified"}
+
+@router.post("/password-reset")
+async def password_reset(email: str):
+    # Placeholder for password reset
+    return {"message": "Password reset email sent"}
+
+
+@router.post("/refresh")
+async def refresh_token(refresh_token: str):
+    # Placeholder for token rotation
+    return {"message": "Token refreshed"}
+
+@router.post("/revoke")
+async def revoke_token(token: str):
+    # Placeholder for token revocation/blacklisting
+    return {"message": "Token revoked"}
+```
+
+---
+

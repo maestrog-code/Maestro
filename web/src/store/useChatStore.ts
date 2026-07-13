@@ -2,6 +2,13 @@ import { create } from "zustand";
 
 export type MessageRole = "system" | "user" | "assistant" | "tool";
 
+export interface OrganizationContext {
+  id: string;
+  name: string;
+  slug: string;
+}
+
+
 export interface ToolCall {
   id: string;
   name: string;
@@ -38,8 +45,10 @@ interface ChatState {
   isSimulationMode: boolean;
   subAgentStreams: Record<string, string>;
   selectedSubAgentLog: string | null;
+  activeOrganization: OrganizationContext | null;
 
   // Actions
+  setActiveOrganization: (org: OrganizationContext | null) => void;
   addMessage: (message: Message) => void;
   appendTokenToLastAssistantMessage: (token: string) => void;
   appendSubAgentToken: (agentName: string, token: string) => void;
@@ -64,6 +73,9 @@ export const useChatStore = create<ChatState>((set) => ({
   isSimulationMode: false,
   subAgentStreams: {},
   selectedSubAgentLog: null,
+  activeOrganization: null,
+
+  setActiveOrganization: (activeOrganization) => set({ activeOrganization }),
 
   addMessage: (message) =>
     set((state) => ({ messages: [...state.messages, message] })),

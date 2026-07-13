@@ -9,7 +9,11 @@ class Settings(BaseSettings):
 
     ENVIRONMENT: str = "development"
 
-    BACKEND_CORS_ORIGINS: List[AnyHttpUrl] = ["http://localhost:3000"]
+    BACKEND_CORS_ORIGINS: List[AnyHttpUrl] = [
+        "http://localhost:3000",
+        "https://maestro.vercel.app", 
+        "https://maestro-production.vercel.app"
+    ]
 
     @validator("BACKEND_CORS_ORIGINS", pre=True)
     def assemble_cors_origins(cls, v: Union[str, List[str]]) -> Union[List[str], str]:

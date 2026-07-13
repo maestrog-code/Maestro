@@ -1,7 +1,7 @@
 # MAESTRO — Development Roadmap
 
-> Status as of Sprint 010 — July 2026
-> Tag: `sprint-010` | Branch: `main`
+> Status as of Sprint 012 — July 2026
+> Tag: `sprint-012` | Branch: `main`
 
 ---
 
@@ -212,6 +212,14 @@
 - [x] **Backend Scaffold:** Restructure and register Dashboard API endpoints (`/metrics`, `/briefing/latest`) to serve UI.
 - [x] **Frontend UI:** Scaffold the Next.js Executive Dashboard Layout (Grid/Shell) and KPI Cards.
 - [x] **Notifications:** Standard polling REST API (`GET /notifications`) for MVP alerts.
+
+### Sprint 012 — Authentication, Security, & Dynamic Workspaces ✅ DONE
+- [x] **Secure Auth Pipeline:** Next.js Server Actions with `HTTP-Only` cookie proxying to FastAPI.
+- [x] **Edge Security:** Next.js Route Protection Middleware (`middleware.ts`) enforcing the access perimeter.
+- [x] **Premium Login UI:** Glassmorphic `/login` component with SVG branding.
+- [x] **Multi-Tenant Hydration:** Zustand global store `activeOrganization` sync and SWR dynamic context fetching.
+
+### Future Scale & Optimizations
 - Performance profiling and optimization
 - Horizontal scaling validation
 - Full observability stack (metrics, traces, alerts)
@@ -263,4 +271,4 @@
 
 ---
 
-*Last updated: Sprint 011 complete — July 2026*
+*Last updated: Sprint 012 complete — July 2026*
