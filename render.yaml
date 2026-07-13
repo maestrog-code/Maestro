@@ -3,6 +3,7 @@ services:
   - type: web
     name: maestro-api
     env: python
+    rootDir: backend/maestro
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     envVars:
@@ -25,6 +26,7 @@ services:
   - type: worker
     name: maestro-celery-worker
     env: python
+    rootDir: backend/maestro
     buildCommand: pip install -r requirements.txt
     startCommand: celery -A app.workers.celery_app worker --loglevel=info
     envVars:
