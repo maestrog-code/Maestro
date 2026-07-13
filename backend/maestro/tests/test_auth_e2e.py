@@ -100,7 +100,7 @@ async def test_login_success(client: AsyncClient):
     await client.post("/api/v1/auth/register", json=TEST_USER)
     response = await client.post(
         "/api/v1/auth/login",
-        json={"email": TEST_USER["email"], "password": TEST_USER["password"]},
+        data={"username": TEST_USER["email"], "password": TEST_USER["password"]},
     )
     assert response.status_code == 200
     data = response.json()
@@ -114,7 +114,7 @@ async def test_login_wrong_password(client: AsyncClient):
     await client.post("/api/v1/auth/register", json=TEST_USER)
     response = await client.post(
         "/api/v1/auth/login",
-        json={"email": TEST_USER["email"], "password": "WrongPassword!"},
+        data={"username": TEST_USER["email"], "password": "WrongPassword!"},
     )
     assert response.status_code == 401
 
@@ -124,7 +124,7 @@ async def test_login_unknown_email(client: AsyncClient):
     """POST /auth/login with unknown email → 401."""
     response = await client.post(
         "/api/v1/auth/login",
-        json={"email": "nobody@maestro.app", "password": "irrelevant"},
+        data={"username": "nobody@maestro.app", "password": "irrelevant"},
     )
     assert response.status_code == 401
 
@@ -150,7 +150,7 @@ async def test_full_auth_flow(client: AsyncClient):
     # Login
     login = await client.post(
         "/api/v1/auth/login",
-        json={"email": TEST_USER["email"], "password": TEST_USER["password"]},
+        data={"username": TEST_USER["email"], "password": TEST_USER["password"]},
     )
     assert login.status_code == 200
     login_token = login.json()["token"]["access_token"]

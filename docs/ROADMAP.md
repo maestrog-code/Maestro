@@ -95,7 +95,7 @@
 
 ---
 
-## v0.1.0 Stabilisation Milestone 🔄 NEXT
+## v0.1.0 Stabilisation Milestone ✅ DONE
 
 > **Do not start Sprint 005 until this milestone is complete.**
 > This investment prevents technical debt from accumulating as AI capabilities expand.
@@ -104,15 +104,15 @@
 
 ### Checklist
 
-- [ ] CI passes consistently on `main` (no flaky tests)
-- [ ] Docker build succeeds from a clean clone (`docker compose up --build`)
-- [ ] Alembic migrations run clean from zero (`alembic upgrade head`)
-- [ ] `README.md` (root) reflects current architecture and setup instructions
-- [ ] `docs/ARCHITECTURE.md` updated to include AI layer and new tables
-- [ ] `docs/AI_CONTEXT.md` updated with Sprint 004 completions and Sprint 005 goals
-- [ ] OpenAPI docs (`/docs`) reviewed — all endpoints documented with correct schemas
-- [ ] Development setup verified on a fresh machine
-- [ ] `v0.1.0` tag created and pushed after all checks pass
+- [x] CI passes consistently on `main` (no flaky tests)
+- [x] Docker build succeeds from a clean clone (`docker compose up --build`)
+- [x] Alembic migrations run clean from zero (`alembic upgrade head`)
+- [x] `README.md` (root) reflects current architecture and setup instructions
+- [x] `docs/ARCHITECTURE.md` updated to include AI layer and new tables
+- [x] `docs/AI_CONTEXT.md` updated with Sprint 004 completions and Sprint 005 goals
+- [x] OpenAPI docs (`/docs`) reviewed — all endpoints documented with correct schemas
+- [x] Development setup verified on a fresh machine
+- [x] `v0.1.0` tag created and pushed after all checks pass
 
 **Scope note:** v0.1.0 stabilisation is backend/API-first. The React/Vite
 `web/` scaffold is not a release blocker for this milestone.
