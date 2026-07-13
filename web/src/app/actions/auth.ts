@@ -37,7 +37,8 @@ export async function loginAction(prevState: any, formData: FormData) {
     const maxAge = 30 * 60; // 30 minutes in seconds
 
     // Set HTTP-only cookie
-    cookies().set("maestro_session", data.access_token, {
+    const cookieStore = await cookies();
+    cookieStore.set("maestro_session", data.token.access_token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
@@ -56,6 +57,7 @@ export async function loginAction(prevState: any, formData: FormData) {
 }
 
 export async function logoutAction() {
-  cookies().delete("maestro_session");
+  const cookieStore = await cookies();
+  cookieStore.delete("maestro_session");
   redirect("/login");
 }
