@@ -7,6 +7,8 @@ import { MessageBubble } from "@/components/chat/MessageBubble";
 import { AgentStatus } from "@/components/chat/AgentStatus";
 import { ChatInput } from "@/components/chat/ChatInput";
 import { sendChatMessage } from "@/lib/api/chat";
+import { authenticatedFetch } from "@/lib/api/authenticatedFetch";
+import { ApiConfigError, describeFetchFailure } from "@/lib/api/config";
 import { 
   Bot, 
   Terminal, 
@@ -60,12 +62,22 @@ export default function Home() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
-  // Unified SWR multi-tenant organization fetch handler
+  // Unified SWR multi-tenant organization fetch handler. authenticatedFetch attaches the
+  // Bearer token so this works cross-domain against the backend (a plain fetch with only
+  // `credentials: "include"` relies on a cookie that never reaches a different domain).
   const { data: organizations, error: orgsError } = useSWR(
-    `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/v1/organizations`,
-    (url) => fetch(url, { credentials: "include" }).then((res) => {
-      if (!res.ok) throw new Error("Workspace validation failed");
+    "/api/v1/organizations",
+    (path) => authenticatedFetch(path).then(async (res) => {
+      if (!res.ok) {
+        const err: any = new Error(describeFetchFailure(undefined, res.status));
+        err.status = res.status;
+        throw err;
+      }
       return res.json();
+    }).catch((err) => {
+      if (err instanceof ApiConfigError) throw err;
+      if (err instanceof Error && err.message) throw err;
+      throw new Error(describeFetchFailure(err));
     }),
     {
       revalidateOnFocus: false,
@@ -110,14 +122,32 @@ export default function Home() {
     );
   }
 
-  // 2. Guardrail: Handle empty organizational clearance zones
-  if (orgsError || !organizations || organizations.length === 0) {
+  // 2. Guardrail: Handle fetch failures and empty org lists distinctly, so a config/network
+  // problem doesn't get reported to the user as if their account lacks permissions.
+  if (orgsError) {
+    const status = (orgsError as any)?.status;
+    const isAuthFailure = status === 401 || status === 403;
     return (
       <div className="flex min-h-screen w-full items-center justify-center bg-[#050505] font-sans px-6 text-center">
         <div className="max-w-md p-8 rounded-2xl border border-red-500/10 bg-red-500/5 text-zinc-100 backdrop-blur-xl">
-          <p className="text-sm font-semibold text-red-400 mb-2">Access Control Denied</p>
+          <p className="text-sm font-semibold text-red-400 mb-2">
+            {isAuthFailure ? "Session issue" : "Unable to load workspace"}
+          </p>
           <p className="text-xs text-zinc-400 leading-relaxed">
-            Your credentials validated successfully, but your profile lacks active security clearance for an enterprise workspace tenant. Contact an administrator to map your organizational access controls.
+            {orgsError.message || "Something went wrong loading your workspace."}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!organizations || organizations.length === 0) {
+    return (
+      <div className="flex min-h-screen w-full items-center justify-center bg-[#050505] font-sans px-6 text-center">
+        <div className="max-w-md p-8 rounded-2xl border border-red-500/10 bg-red-500/5 text-zinc-100 backdrop-blur-xl">
+          <p className="text-sm font-semibold text-red-400 mb-2">No workspace yet</p>
+          <p className="text-xs text-zinc-400 leading-relaxed">
+            Your account isn't attached to an organization yet. Contact an administrator or create a new workspace.
           </p>
         </div>
       </div>

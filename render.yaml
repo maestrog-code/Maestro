@@ -20,5 +20,7 @@ services:
         generateValue: true
       - key: BACKEND_CORS_ORIGINS
         sync: false
+      - key: BACKEND_CORS_ORIGIN_REGEX
+        sync: false
       - key: GEMINI_API_KEY
         sync: false

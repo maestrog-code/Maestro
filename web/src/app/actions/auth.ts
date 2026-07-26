@@ -2,6 +2,12 @@
 
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { getApiBaseUrl } from "@/lib/api/config";
+
+// Must match backend ACCESS_TOKEN_EXPIRE_MINUTES (backend/maestro/app/core/config.py).
+// Previously this constant was computed but never actually used — the cookie was hardcoded
+// to 30 days regardless, so sessions outlived their JWTs by a wide margin.
+const ACCESS_TOKEN_MAX_AGE_SECONDS = 30 * 60;
 
 export async function loginAction(prevState: any, formData: FormData) {
   const email = formData.get("email") as string;
@@ -11,12 +17,19 @@ export async function loginAction(prevState: any, formData: FormData) {
     return { error: "Email and password are required." };
   }
 
+  let apiBaseUrl: string;
+  try {
+    apiBaseUrl = getApiBaseUrl();
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Configuration error." };
+  }
+
   try {
     const params = new URLSearchParams();
     params.append("username", email);
     params.append("password", password);
 
-    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/v1/auth/login`, {
+    const res = await fetch(`${apiBaseUrl}/api/v1/auth/login`, {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
@@ -25,35 +38,39 @@ export async function loginAction(prevState: any, formData: FormData) {
     });
 
     if (!res.ok) {
-      // Handle known errors cleanly
       if (res.status === 401 || res.status === 422) {
         return { error: "Invalid credentials." };
+      }
+      if (res.status >= 500) {
+        return { error: "Maestro's services are experiencing an issue. Please try again shortly." };
       }
       return { error: "An unexpected server error occurred." };
     }
 
     const data = await res.json();
-    const token = data.token.access_token;
-    const maxAge = 30 * 60; // 30 minutes in seconds
+    const accessToken: string = data.token.access_token;
 
-    // Set HTTP-only cookie
+    // Cookie is kept as a fallback (see backend/maestro/app/dependencies/auth.py, which checks
+    // the Authorization header first and this cookie second) and so the edge middleware has a
+    // cheap "is there a session at all" signal. It is NOT what authenticates cross-domain
+    // requests to the backend — the client stores the token separately and sends it as a
+    // Bearer header via authenticatedFetch() for that.
     const cookieStore = await cookies();
-    cookieStore.set("maestro_session", data.token.access_token, {
+    cookieStore.set("maestro_session", accessToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
-      maxAge: 30 * 24 * 60 * 60, // 30 days
+      maxAge: ACCESS_TOKEN_MAX_AGE_SECONDS,
       path: "/",
     });
 
+    // Returned to the client instead of redirecting from here, so the client can store the
+    // token (for Bearer auth) before navigating.
+    return { success: true, token: accessToken };
   } catch (error) {
     console.error("Login Server Action Error:", error);
-    return { error: "Failed to connect to the authentication server." };
+    return { error: "Unable to reach Maestro's services. Check your connection and try again." };
   }
-
-  // Redirect on success (Next.js redirect throws an error under the hood, 
-  // so it must be called outside the try/catch block)
-  redirect("/");
 }
 
 export async function logoutAction() {
@@ -71,15 +88,22 @@ export async function signupAction(prevState: any, formData: FormData) {
     return { error: "All fields are required to provision a workspace." };
   }
 
+  let apiBaseUrl: string;
+  try {
+    apiBaseUrl = getApiBaseUrl();
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Configuration error." };
+  }
+
   try {
     // 1. Register User
-    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/v1/auth/register`, {
+    const res = await fetch(`${apiBaseUrl}/api/v1/auth/register`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ 
-        email: email, 
+      body: JSON.stringify({
+        email: email,
         password: password
       }),
     });
@@ -93,14 +117,14 @@ export async function signupAction(prevState: any, formData: FormData) {
     const token = data.token.access_token;
 
     // 2. Provision Workspace (Organization)
-    const orgRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/v1/organizations/`, {
+    const orgRes = await fetch(`${apiBaseUrl}/api/v1/organizations/`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${token}`
       },
-      body: JSON.stringify({ 
-        name: company 
+      body: JSON.stringify({
+        name: company
       }),
     });
 
@@ -110,7 +134,7 @@ export async function signupAction(prevState: any, formData: FormData) {
 
   } catch (error) {
     console.error("Signup Server Action Error:", error);
-    return { error: "Failed to connect to the authentication server." };
+    return { error: "Unable to reach Maestro's services. Check your connection and try again." };
   }
 
   // Redirect to login upon successful workspace creation

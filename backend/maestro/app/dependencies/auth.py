@@ -19,12 +19,18 @@ async def get_current_user(
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
-    token = request.cookies.get("maestro_session")
+    # Authorization header takes priority. The frontend's session cookie is scoped to the
+    # frontend's own domain (set via Next.js `cookies().set()`), so it never reaches this
+    # backend on a cross-domain request in production — only the Bearer header does. The
+    # cookie check remains as a fallback for same-domain / local dev setups.
+    token = None
+    authorization: str = request.headers.get("Authorization")
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization.split(" ")[1]
+
     if not token:
-        authorization: str = request.headers.get("Authorization")
-        if authorization and authorization.startswith("Bearer "):
-            token = authorization.split(" ")[1]
-        
+        token = request.cookies.get("maestro_session")
+
     if not token:
         raise credentials_exception
 

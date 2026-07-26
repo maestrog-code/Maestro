@@ -1,7 +1,9 @@
 "use client";
 
 import React, { useState } from "react";
+import { useRouter } from "next/navigation";
 import { loginAction } from "@/app/actions/auth";
+import { setAccessToken } from "@/lib/auth/tokenStorage";
 import { MaestroLogo } from "@/components/ui/MaestroLogo";
 import { ArrowRight, Loader2, ShieldAlert } from "lucide-react";
 import { useFormState, useFormStatus } from "react-dom";
@@ -11,6 +13,7 @@ import { useFormState, useFormStatus } from "react-dom";
 // Actually, to be extremely robust without worrying about experimental flags, let's use a standard useState wrapper around the server action.
 
 export default function LoginPage() {
+  const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [isPending, setIsPending] = useState(false);
 
@@ -25,8 +28,16 @@ export default function LoginPage() {
     if (result?.error) {
       setError(result.error);
       setIsPending(false);
+      return;
     }
-    // On success, loginAction handles the redirect, so we don't need to unset isPending
+
+    if (result?.success && result.token) {
+      // Store the access token so authenticatedFetch() can attach it as a Bearer header
+      // on subsequent client-side requests to the backend (the httpOnly cookie set by the
+      // server action can't cross domains to the backend on its own).
+      setAccessToken(result.token);
+      router.push("/");
+    }
   };
 
   return (

@@ -4,9 +4,15 @@ import React from "react";
 import useSWR from "swr";
 import ReactMarkdown from "react-markdown";
 import { DollarSign, Percent, Cpu, Clock, TrendingUp, TrendingDown, AlertTriangle } from "lucide-react";
+import { authenticatedFetch } from "@/lib/api/authenticatedFetch";
+import { describeFetchFailure } from "@/lib/api/config";
 
-const fetcher = (url: string) => fetch(url, { credentials: "include" }).then((res) => {
-  if (!res.ok) throw new Error("Failed to pull backend telemetry");
+const fetcher = (path: string) => authenticatedFetch(path).then((res) => {
+  if (!res.ok) {
+    const err: any = new Error(describeFetchFailure(undefined, res.status));
+    err.status = res.status;
+    throw err;
+  }
   return res.json();
 });
 
@@ -15,18 +21,17 @@ interface ExecutiveDashboardProps {
 }
 
 export function ExecutiveDashboard({ orgId }: ExecutiveDashboardProps) {
-  // 1. Existing Metrics Hook
-  const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-
+  // 1. Existing Metrics Hook (authenticatedFetch resolves the base URL itself, including
+  // the explicit production validation in lib/api/config.ts)
   const { data: telemetry, error: metricsError } = useSWR(
-    orgId ? `${API_BASE}/api/v1/organizations/${orgId}/dashboard/metrics` : null,
+    orgId ? `/api/v1/organizations/${orgId}/dashboard/metrics` : null,
     fetcher,
     { refreshInterval: 120000, revalidateOnFocus: true } // Auto-poll every 2m, force on focus
   );
 
   // 2. NEW: Briefing Hook
   const { data: briefingData, error: briefingError } = useSWR(
-    orgId ? `${API_BASE}/api/v1/organizations/${orgId}/dashboard/briefing/latest` : null,
+    orgId ? `/api/v1/organizations/${orgId}/dashboard/briefing/latest` : null,
     fetcher,
     { refreshInterval: 300000, revalidateOnFocus: true } // Poll every 5m, force on focus
   );

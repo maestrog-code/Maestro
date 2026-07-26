@@ -1,6 +1,6 @@
 import { useChatStore } from "@/store/useChatStore";
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
+import { authenticatedFetch } from "@/lib/api/authenticatedFetch";
+import { ApiConfigError, describeFetchFailure } from "@/lib/api/config";
 
 const delay = (ms: number, signal?: AbortSignal) =>
   new Promise<void>((resolve, reject) => {
@@ -173,17 +173,16 @@ export async function sendChatMessage(
   store.setAgentState("Initializing...");
 
   try {
-    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/v1/organizations/${orgId}/ai/chat`, {
+    const response = await authenticatedFetch(`/api/v1/organizations/${orgId}/ai/chat`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
       body: JSON.stringify({ message: prompt }), // Corrected schema key: "message" instead of "prompt"
       signal,
     });
 
     if (!response.ok) {
-      throw new Error(`HTTP Error: ${response.status}`);
+      const err: any = new Error(describeFetchFailure(undefined, response.status));
+      err.status = response.status;
+      throw err;
     }
 
     if (!response.body) {
@@ -262,6 +261,10 @@ export async function sendChatMessage(
   } catch (error: any) {
     if (error.name === "AbortError") {
       console.log("Stream aborted");
+      store.resetStreamState();
+    } else if (error instanceof ApiConfigError) {
+      console.error("API configuration error:", error.message);
+      store.appendTokenToLastAssistantMessage(`⚠️ ${error.message}`);
       store.resetStreamState();
     } else {
       console.warn("Real connection failed. Falling back to simulation mode.", error);
