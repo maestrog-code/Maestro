@@ -1,0 +1,17 @@
+[
+    {
+        "query": "What is our Q3 financial strategy?",
+        "expected_documents": ["Q3 Financial Strategy", "2026 Board Update"],
+        "expected_topics": ["infrastructure costs", "database migration"]
+    },
+    {
+        "query": "How do I request time off?",
+        "expected_documents": ["Employee Handbook - PTO", "HR Policies 2026"],
+        "expected_topics": ["workday", "manager approval"]
+    },
+    {
+        "query": "What are the new security compliance requirements for production?",
+        "expected_documents": ["Infosec Policy 2026", "Production Deployment SOP"],
+        "expected_topics": ["SOC2", "MFA", "VPN"]
+    }
+]
