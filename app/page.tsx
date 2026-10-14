@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { checkApiHealth, type HealthResponse } from './lib/api'
 import {
   Activity,
   AlertTriangle,
@@ -42,6 +43,20 @@ const agents = [
 export default function Home() {
   const [mobileNav, setMobileNav] = useState(false)
   const [activeNav, setActiveNav] = useState('Overview')
+  const [apiState, setApiState] = useState<'idle' | 'checking' | 'connected' | 'error'>('idle')
+  const [health, setHealth] = useState<HealthResponse | null>(null)
+
+  async function handleCheckConnection() {
+    setApiState('checking')
+    try {
+      const result = await checkApiHealth()
+      setHealth(result)
+      setApiState('connected')
+    } catch {
+      setHealth(null)
+      setApiState('error')
+    }
+  }
 
   return (
     <main className="app-shell">
@@ -85,7 +100,7 @@ export default function Home() {
         <header className="topbar">
           <button className="menu-button" onClick={() => setMobileNav(true)} aria-label="Open navigation"><Menu size={20} /></button>
           <div className="breadcrumbs"><span>Workspace</span><span className="slash">/</span><strong>{activeNav}</strong></div>
-          <div className="topbar-actions"><button className="icon-button" aria-label="Search"><Search size={18} /></button><button className="command-button"><Command size={15} /> <span>Search</span><kbd>⌘ K</kbd></button><button className="button primary"><Plus size={16} data-icon="inline-start" /> New run</button></div>
+          <div className="topbar-actions"><button className="icon-button" aria-label="Search"><Search size={18} /></button><button className="command-button"><Command size={15} /> <span>Search</span><kbd>⌘ K</kbd></button><button className="button secondary" onClick={handleCheckConnection} disabled={apiState === 'checking'}><span className={`connection-dot ${apiState}`} />{apiState === 'checking' ? 'Checking API' : apiState === 'connected' ? 'API connected' : apiState === 'error' ? 'API unavailable' : 'Check API'}</button><button className="button primary"><Plus size={16} data-icon="inline-start" /> New run</button></div>
         </header>
         <div className="page-content">
           <div className="page-heading"><div><div className="eyebrow"><Sparkles size={14} /> Operations overview</div><h1>Good morning, Jordan</h1><p>Here's what's happening across your workspace.</p></div><button className="date-button">Last 24 hours <ChevronDown size={15} /></button></div>
@@ -102,7 +117,7 @@ export default function Home() {
           </div>
 
           <section className="panel agents-panel"><div className="panel-header"><div><h2>Your agents</h2><p>Manage the intelligence powering your workflows.</p></div><button className="text-button">Manage agents <ArrowUpRight size={15} /></button></div><div className="agents-grid">{agents.map((agent) => <div className="agent-card" key={agent.name}><div className={`large-agent-icon ${agent.color}`}><Bot size={20} /></div><div className="agent-card-copy"><div className="agent-title"><strong>{agent.name}</strong><span className={`agent-state ${agent.state.toLowerCase()}`}><Circle size={7} fill="currentColor" /> {agent.state}</span></div><p>{agent.role}</p><div className="load-row"><span>Current load</span><strong>{agent.load}</strong></div><div className="load-bar"><span className={agent.color} style={{ width: agent.load === '—' ? '0%' : agent.load }} /></div></div><button className="table-more" aria-label={`More actions for ${agent.name}`}><MoreHorizontal size={17} /></button></div>)}</div></section>
-          <footer className="footer"><span>Maestro platform</span><span>All systems operational</span><span>v0.8.4</span></footer>
+          <footer className="footer"><span>Maestro platform</span><span>{health ? `Database ${health.database} · Redis ${health.redis}` : 'All systems operational'}</span><span>v0.8.4</span></footer>
         </div>
       </section>
     </main>
